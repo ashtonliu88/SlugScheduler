@@ -15,13 +15,13 @@ export default function Chat({ setCourses }) {
     if (input.trim()) {
       setMessages([...messages, { text: input, sender: "user" }])
 
-      const response = await fetch("http://localhost:5000/schedule", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text: input }),
-      })
+      // const response = await fetch("http://localhost:5000/schedule", {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      //   body: JSON.stringify({ text: input }),
+      // })
 
       setTimeout(() => {
         setMessages((prev) => [
