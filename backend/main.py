@@ -135,8 +135,8 @@ def get_eligible_courses(data, student_history):
     return pd.DataFrame(eligible_courses)
 
 
-@app.route("/schedule", methods=["POST"])
-def schedule():
+
+def main():
     student_history = ["MATH 19A", "CSE 20", "PHYS 1B", "MATH 19B", "CSE 30", "HAVC 135H", "MATH 21", "CSE 16", "HIS 74A",
                        "AM 30", "CSE 12", "HAVC 64", "CSE 13S", "CSE 101", "CSE 40"]
     major = input("Enter your major: ")
@@ -186,4 +186,4 @@ def schedule():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    main()

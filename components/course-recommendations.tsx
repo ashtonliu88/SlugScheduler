@@ -62,7 +62,7 @@ export default function CourseRecommendations({
                       <CardHeader onClick={() => openCourseDetails(course)}>
                         <CardTitle className="text-sm flex justify-between items-center">
                           <span className="text-[#e7e7e7]">{course.name}</span>
-                          <Badge variant={course.status === "Open" ? "success" : "destructive"} className="ml-2">
+                          <Badge variant={course.status === "Open" ? "default" : "destructive"} className="ml-2">
                             {course.status}
                           </Badge>
                         </CardTitle>
@@ -138,7 +138,7 @@ export default function CourseRecommendations({
                 <div className="text-sm text-[#e7e7e7]/70">
                   <div className="flex items-center gap-2">
                     Status:
-                    <Badge variant={selectedCourse?.status === "Open" ? "success" : "destructive"}>
+                    <Badge variant={selectedCourse?.status === "default" ? "default" : "destructive"}>
                       {selectedCourse?.status}
                     </Badge>
                   </div>
