@@ -4,13 +4,12 @@ import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { PaperclipIcon as PaperClip } from "lucide-react"
 
-export default function Chat() {
+export default function Chat({ setCourses }: { setCourses: (courses: any) => void }) {
   
   const [messages, setMessages] = useState([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   // Handle file selection and upload
-  //Hopefuly trying to redeploy
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
