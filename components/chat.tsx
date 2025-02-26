@@ -49,6 +49,15 @@ export default function Chat({ setCourses }) {
         ...prev,
         { text: `Extracted data: Major - ${result.data.major}, Year of Admission - ${yearOfAdmission}`, sender: "bot" },
       ])
+      const previousCourses = Object.values(result.data.courses_by_quarter)
+        .flat()
+        .map((course: { course_code: string }) => course.course_code)
+        .join(", ") || "No courses found"
+      setMessages((prev) => [
+        ...prev,
+        { text: `Previous courses: ${previousCourses}`, sender: "bot" },
+      ])
+      
       
       setCourses((prevCourses) => {
         const courseTimings = [
