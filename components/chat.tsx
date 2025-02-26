@@ -10,6 +10,7 @@ export default function Chat() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   // Handle file selection and upload
+  //Hopefuly trying to redeploy
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
