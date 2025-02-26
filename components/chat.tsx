@@ -4,7 +4,8 @@ import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { PaperclipIcon as PaperClip } from "lucide-react"
 
-export default function Chat({ setCourses }: { setCourses: (courses: any) => void }) {
+export default function Chat({ setCourses }) {
+  
   
   const [messages, setMessages] = useState([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -49,6 +50,50 @@ export default function Chat({ setCourses }: { setCourses: (courses: any) => voi
         { text: `Extracted data: Major - ${result.data.major}, Year of Admission - ${yearOfAdmission}`, sender: "bot" },
       ])
       
+      setCourses((prevCourses) => {
+        const courseTimings = [
+          { days: "MWF", time: "07:05 - 08:45" },
+          { days: "TTH", time: "09:00 - 10:30" },
+          { days: "MWF", time: "11:00 - 12:15" },
+        ]
+
+        const newCourse = {
+          id: `CS${prevCourses.length + 101}`,
+          name: `Computer Science ${prevCourses.length + 101}`,
+          quarterOffered: "Fall 2024",
+          career: "Undergraduate",
+          grading: "Letter Grade",
+          classNumber: `${12345 + prevCourses.length}`,
+          type: "Lecture",
+          instructionMode: "In Person",
+          credits: 4,
+          generalEducation: ["Quantitative Reasoning"],
+          status: "Open",
+          availableSeats: 15,
+          enrollmentCapacity: 120,
+          enrolled: 105,
+          waitListCapacity: 20,
+          waitListTotal: 0,
+          description: "An introduction to computer science and programming.",
+          enrollmentRequirements: "None",
+          classNotes: "Laptop required for in-class exercises",
+          meetingInformation: {
+            ...courseTimings[prevCourses.length % courseTimings.length],
+            location: "Science Center 101",
+            instructor: "Dr. Smith",
+          },
+          associatedSections: [
+            {
+              type: "Lab",
+              number: "LA1",
+              days: "T",
+              time: "14:00 - 15:50",
+              location: "Computer Lab 204",
+            },
+          ],
+        }
+        return [...prevCourses, newCourse]
+      })
     } catch (error) {
       console.error("Error uploading file:", error)
       setMessages((prev) => [
@@ -57,7 +102,6 @@ export default function Chat({ setCourses }: { setCourses: (courses: any) => voi
       ])
     }
   }
-  
   
   
 
