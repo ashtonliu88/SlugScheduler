@@ -4,7 +4,8 @@ import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { PaperclipIcon as PaperClip } from "lucide-react"
 
-export default function Chat({ }) {
+export default function Chat() {
+  
   const [messages, setMessages] = useState([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
