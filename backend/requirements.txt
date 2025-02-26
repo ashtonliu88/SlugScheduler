@@ -4,3 +4,4 @@ openai
 pymongo
 python-dotenv
 PyPDF2
+flask_cors
