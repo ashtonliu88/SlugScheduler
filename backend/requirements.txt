@@ -3,3 +3,4 @@ pandas
 openai
 pymongo
 python-dotenv
+PyPDF2

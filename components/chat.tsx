@@ -1,16 +1,16 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { PaperclipIcon as PaperClip } from "lucide-react"
 
 export default function Chat({ setCourses }) {
   const [messages, setMessages] = useState([])
-  const [selectedFile, setSelectedFile] = useState(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0]
+  // Handle file selection and upload
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
     if (file) {
       setSelectedFile(file)
       setMessages([...messages, { text: `Uploaded file: ${file.name}`, sender: "user" }])
@@ -69,6 +69,12 @@ export default function Chat({ setCourses }) {
           return [...prevCourses, newCourse]
         })
       }, 1000)
+
+      // Simulate file upload (replace with actual API call)
+      const formData = new FormData()
+      formData.append("file", file, file.name)
+      console.log("Uploading file:", file.name)
+      // Example: fetch("/api/upload", { method: "POST", body: formData })
     }
   }
 
@@ -97,14 +103,10 @@ export default function Chat({ setCourses }) {
         />
         {/* Button to Trigger File Input */}
         <label htmlFor="file-upload" className="cursor-pointer">
-          <Button
-            type="button"
-            size="icon"
-            className="rounded-full bg-[#313638] text-[#e7e7e7] hover:bg-[#1c5162] border-black p-4"
-          >
+          <div className="rounded-full bg-[#313638] text-[#e7e7e7] hover:bg-[#1c5162] border-black p-4">
             <PaperClip className="h-5 w-5" />
             <span className="sr-only">Upload transcript</span>
-          </Button>
+          </div>
         </label>
         {/* Display Selected File Name */}
         {selectedFile && <span className="text-[#e7e7e7] mt-2">Selected file: {selectedFile.name}</span>}
