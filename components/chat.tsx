@@ -2,32 +2,25 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
-import { PaperclipIcon as PaperClip, Send } from "lucide-react"
+import { PaperclipIcon as PaperClip } from "lucide-react"
 
 export default function Chat({ setCourses }) {
   const [messages, setMessages] = useState([])
-  const [input, setInput] = useState("")
+  const [selectedFile, setSelectedFile] = useState(null)
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (input.trim()) {
-      setMessages([...messages, { text: input, sender: "user" }])
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0]
+    if (file) {
+      setSelectedFile(file)
+      setMessages([...messages, { text: `Uploaded file: ${file.name}`, sender: "user" }])
 
-      // const response = await fetch("http://localhost:5000/schedule", {
-      //   method: "POST",
-      //   headers: {
-      //     "Content-Type": "application/json",
-      //   },
-      //   body: JSON.stringify({ text: input }),
-      // })
-
+      // Simulate processing and generating course recommendations
       setTimeout(() => {
         setMessages((prev) => [
           ...prev,
           {
-            text: `I've analyzed your input: "${input}" and found some recommended courses.`,
+            text: `Analyzed file: ${file.name} and found recommended courses.`,
             sender: "bot",
           },
         ])
@@ -76,13 +69,6 @@ export default function Chat({ setCourses }) {
           return [...prevCourses, newCourse]
         })
       }, 1000)
-      setInput("")
-    }
-  }
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      handleSubmit(e)
     }
   }
 
@@ -100,32 +86,28 @@ export default function Chat({ setCourses }) {
           </Card>
         ))}
       </div>
-      <div className="p-4 border-t border-black">
-        <form onSubmit={handleSubmit} className="flex items-end gap-2">
-          <Textarea
-            placeholder="Upload transcript or enter completed courses..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="resize-none bg-[#313638] text-[#e7e7e7] placeholder-[#e7e7e7]/50 border-black focus:border-[#348AA7] transition-all duration-300"
-            rows={3}
-          />
-          <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="rounded-full bg-[#313638] text-[#e7e7e7] hover:bg-[#1c5162] border-black"
-            >
-              <PaperClip className="h-4 w-4" />
-              <span className="sr-only">Attach transcript</span>
-            </Button>
-            <Button type="submit" size="icon" className="rounded-full bg-[#348AA7] text-[#e7e7e7] hover:bg-[#1c5162]">
-              <Send className="h-4 w-4" />
-              <span className="sr-only">Send</span>
-            </Button>
-          </div>
-        </form>
+      <div className="p-4 border-t border-black flex flex-col items-center gap-2">
+        {/* File Input */}
+        <input
+          type="file"
+          id="file-upload"
+          className="hidden"
+          onChange={handleFileUpload}
+          accept=".pdf,.txt,.doc,.docx" // Optional: Restrict file types
+        />
+        {/* Button to Trigger File Input */}
+        <label htmlFor="file-upload" className="cursor-pointer">
+          <Button
+            type="button"
+            size="icon"
+            className="rounded-full bg-[#313638] text-[#e7e7e7] hover:bg-[#1c5162] border-black p-4"
+          >
+            <PaperClip className="h-5 w-5" />
+            <span className="sr-only">Upload transcript</span>
+          </Button>
+        </label>
+        {/* Display Selected File Name */}
+        {selectedFile && <span className="text-[#e7e7e7] mt-2">Selected file: {selectedFile.name}</span>}
       </div>
     </div>
   )
