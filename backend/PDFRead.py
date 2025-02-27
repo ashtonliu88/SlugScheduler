@@ -113,6 +113,19 @@ def upload_pdf():
         courses_by_quarter = parse_courses(cleaned_lines)
         major = extract_major(cleaned_lines)
 
+        #studnet history in the form of course codes in list format
+        student_history = []
+        for quarter, courses in courses_by_quarter.items():
+            for course in courses:
+                student_history.append(course['course_code'])
+        
+        #year of admission
+        year_of_admission = list(courses_by_quarter.keys())[0].split(" ")[0]
+
+        # Extract the major from the cleaned lines
+        major = extract_major(cleaned_lines)
+        print(major)
+
         return jsonify({
             "success": True,
             "data": {
