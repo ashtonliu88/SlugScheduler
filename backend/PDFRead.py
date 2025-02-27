@@ -11,6 +11,7 @@ UPLOAD_FOLDER = "/tmp"
 ALLOWED_EXTENSIONS = {"pdf"}
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
+
 # List of valid course codes
 course_codes = [
     'ACEN', 'AM', 'ANTH', 'APLX', 'ARBC', 'ART', 'ARTG', 'ASTR', 'BIOC', 'BIOE',
