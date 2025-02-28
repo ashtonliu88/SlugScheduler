@@ -135,26 +135,23 @@ def upload_pdf():
         # Extract the major from the cleaned lines
         major = extract_major(cleaned_lines)
 
-        db = client["university"]  # Name of your MongoDB database
-        collection = db['majors']
-        query = {"major": major, "admission_year": year_of_admission}
-        curriculum = collection.find_one(query)
+        # db = client["university"]  # Name of your MongoDB database
+        # collection = db['majors']
+        # query = {"major": major, "admission_year": year_of_admission}
+        # curriculum = collection.find_one(query)
         
-        if curriculum:
-            required_courses = curriculum.get("required_courses", [])
-            upper_div_categories = curriculum.get("upper_div_categories", [])
-            upper_div_electives_taken = 0
-            for category_name, courses in upper_div_categories.items():
-                print(f"\nCategory: {category_name}")
-                for course_group in courses:
-                    for course in course_group:
-                        if course in student_history:
-                            upper_div_electives_taken += 1
-                            print(f"Course taken: {course}")
+        # if curriculum:
+        #     required_courses = curriculum.get("required_courses", [])
+        #     upper_div_categories = curriculum.get("upper_div_categories", [])
+        #     upper_div_electives_taken = 0
+        #     for category_name, courses in upper_div_categories.items():
+        #         for course_group in courses:
+        #             for course in course_group:
+        #                 if course in student_history:
+        #                     upper_div_electives_taken += 1
+        #                     print(f"Course taken: {course}")
             
-            print(f"\nUpper division electives taken: {upper_div_electives_taken}")
-        else:
-            print(f"No curriculum found for major: {major}, year: {year_of_admission}")
+        # else:
 
         return jsonify({
             "success": True,
