@@ -22,7 +22,7 @@ export default function Chat({ setCourses }) {
     formData.append("file", file)
   
     try {
-      const response = await fetch("http://127.0.0.1:5000/upload", { // Ensure correct API URL
+      const response = await fetch("https://slugschedulerrenderhost.onrender.com/upload", { // Ensure correct API URL
         method: "POST",
         body: formData,
       })
