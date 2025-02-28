@@ -3,6 +3,8 @@ import PyPDF2
 import os
 import sys
 from flask_cors import CORS
+from pymongo import MongoClient
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 CORS(app)  # Allow frontend requests
@@ -11,7 +13,14 @@ UPLOAD_FOLDER = "/tmp"
 ALLOWED_EXTENSIONS = {"pdf"}
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
+# Load environment variables from .env file
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
+# Obtain MongoDB connection string from environment variables
+mongo_connection_string = os.getenv("MONGO_URI")
+
+# Initialize MongoDB client
+client = MongoClient(mongo_connection_string)
 # List of valid course codes
 course_codes = [
     'ACEN', 'AM', 'ANTH', 'APLX', 'ARBC', 'ART', 'ARTG', 'ASTR', 'BIOC', 'BIOE',
@@ -125,7 +134,27 @@ def upload_pdf():
 
         # Extract the major from the cleaned lines
         major = extract_major(cleaned_lines)
-        print(major)
+
+        db = client["university"]  # Name of your MongoDB database
+        collection = db['majors']
+        query = {"major": major, "admission_year": year_of_admission}
+        curriculum = collection.find_one(query)
+        
+        if curriculum:
+            required_courses = curriculum.get("required_courses", [])
+            upper_div_categories = curriculum.get("upper_div_categories", [])
+            upper_div_electives_taken = 0
+            for category_name, courses in upper_div_categories.items():
+                print(f"\nCategory: {category_name}")
+                for course_group in courses:
+                    for course in course_group:
+                        if course in student_history:
+                            upper_div_electives_taken += 1
+                            print(f"Course taken: {course}")
+            
+            print(f"\nUpper division electives taken: {upper_div_electives_taken}")
+        else:
+            print(f"No curriculum found for major: {major}, year: {year_of_admission}")
 
         return jsonify({
             "success": True,
