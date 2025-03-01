@@ -77,7 +77,6 @@ export default function Chat({ setCourses }) {
         { text: `Remaining required courses: ${remainRequiredCourses}`, sender: "bot" },
       ])
 
-      const recommendedCourses = result.data.recommended_courses.course1
       
 
       setCourses((prevCourses) => {
