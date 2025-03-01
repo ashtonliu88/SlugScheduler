@@ -58,21 +58,42 @@ export default function Chat({ setCourses }) {
         { text: `Previous courses: ${previousCourses}`, sender: "bot" },
       ])
       
+      //output how many upper courses taken
+      const numUpperCourses = result.data.upper_div_electives_taken
+      setMessages((prev) => [
+        ...prev,
+        { text: `Number of upper division electives taken: ${numUpperCourses}`, sender: "bot" },
+      ])
       
+      const restUpperCourses = result.data.remaining_upper_div_courses
+      setMessages((prev) => [
+        ...prev,
+        { text: `Remaining upper division courses: ${restUpperCourses}`, sender: "bot" },
+      ])
+
+      const remainRequiredCourses = result.data.remaining_required_courses
+      setMessages((prev) => [
+        ...prev,
+        { text: `Remaining required courses: ${remainRequiredCourses}`, sender: "bot" },
+      ])
+
+      const recommendedCourses = result.data.recommended_courses.course1
+      
+
       setCourses((prevCourses) => {
         const courseTimings = [
           { days: "MWF", time: "07:05 - 08:45" },
           { days: "TTH", time: "09:00 - 10:30" },
           { days: "MWF", time: "11:00 - 12:15" },
         ]
-
-        const newCourse = {
-          id: `CS${prevCourses.length + 101}`,
-          name: `Computer Science ${prevCourses.length + 101}`,
+        
+        const newCourses = Array.from({ length: 3 }, (_, index) => ({
+          id: `CS${prevCourses.length + 101 + index}`,
+          name: `Computer Science ${prevCourses.length + 101 + index}`,
           quarterOffered: "Fall 2024",
           career: "Undergraduate",
           grading: "Letter Grade",
-          classNumber: `${12345 + prevCourses.length}`,
+          classNumber: `${12345 + prevCourses.length + index}`,
           type: "Lecture",
           instructionMode: "In Person",
           credits: 4,
@@ -87,21 +108,21 @@ export default function Chat({ setCourses }) {
           enrollmentRequirements: "None",
           classNotes: "Laptop required for in-class exercises",
           meetingInformation: {
-            ...courseTimings[prevCourses.length % courseTimings.length],
+            ...courseTimings[(prevCourses.length + index) % courseTimings.length],
             location: "Science Center 101",
             instructor: "Dr. Smith",
           },
           associatedSections: [
             {
               type: "Lab",
-              number: "LA1",
+              number: `LA${index + 1}`,
               days: "T",
               time: "14:00 - 15:50",
               location: "Computer Lab 204",
             },
           ],
-        }
-        return [...prevCourses, newCourse]
+        }))
+        return [...prevCourses, ...newCourses]
       })
     } catch (error) {
       console.error("Error uploading file:", error)

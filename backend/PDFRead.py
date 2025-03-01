@@ -4,11 +4,15 @@ import os
 import sys
 from flask_cors import CORS
 from pymongo import MongoClient
+import openai
 from dotenv import load_dotenv
+import re
 
 app = Flask(__name__)
 CORS(app)  # Allow frontend requests
 
+openai.api_key = os.getenv("OPENAI_API_KEY")
+openai_client = openai
 UPLOAD_FOLDER = "/tmp"
 ALLOWED_EXTENSIONS = {"pdf"}
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
@@ -101,6 +105,60 @@ def extract_major(cleaned_lines):
     matching_lines = [line for line in cleaned_lines if 'Plan:' in line]
     return matching_lines[-2].split('Plan:')[-1].strip() if len(matching_lines) >= 2 else "Unknown"
 
+
+def generate_schedule(courses, student_history, required_courses, upper_electives_taken, upper_electives_needed, prerequisites, model="chatgpt-4o-latest"):
+    
+
+    prompt = f"""
+    Here is a list of available courses for next quarter:
+    
+    {courses}
+    
+    The student has only taken the following courses:
+    {student_history}
+
+    The prerequisites for the courses are as follows:
+    
+    {prerequisites}
+
+    REMOVE CLASSES FOR CONSIDERATION FROM THE COURSE LIST THAT THE STUDENT DOES NOT HAVE THE PREREQUISITES FOR.
+
+    These are courses that the student still needs to take:
+
+    {required_courses}
+    prioritize courses that are prerequisites for future courses.
+    
+    This is the number of upper division electives the student has taken:
+    {upper_electives_taken}
+    Upper electives will be classes with course codes 100+.
+    This is the number of upper division electives the student needs to take:
+    {upper_electives_needed}
+
+    Pick at least 3 classes that provide a balanced schedule based on variety, workload, and prerequisites and which completes their general education in a timely fashion.
+    PRIORITIZE REQUIRED CLASSES.
+    INCLUDE JUST THE COURSE CODES and nothing else, classes that end in L are not classes.
+
+    
+    Prioritize courses that are prerequisites for future courses.
+    Ensure that the student meets all prerequisites for the selected courses.
+    Do not include courses that the student has already taken.
+    Do not recommend classes that require prerequisites that the student will take with the courses.
+    Additionally, show which class and their times needs to be selected to provide a balanced schedule.
+    If a class has discussion or lab sections, pick one that will be best for their schedule.
+    """
+
+    response = openai_client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": "You are an expert academic advisor."},
+            {"role": "user", "content": prompt},
+        ],
+    )
+    
+    response_message = response.choices[0].message.content
+
+    return response_message
+
 @app.route('/upload', methods=['POST'])
 def upload_pdf():
     """Handle file upload and processing."""
@@ -135,29 +193,82 @@ def upload_pdf():
         # Extract the major from the cleaned lines
         major = extract_major(cleaned_lines)
 
-        # db = client["university"]  # Name of your MongoDB database
-        # collection = db['majors']
-        # query = {"major": major, "admission_year": year_of_admission}
-        # curriculum = collection.find_one(query)
-        
-        # if curriculum:
-        #     required_courses = curriculum.get("required_courses", [])
-        #     upper_div_categories = curriculum.get("upper_div_categories", [])
-        #     upper_div_electives_taken = 0
-        #     for category_name, courses in upper_div_categories.items():
-        #         for course_group in courses:
-        #             for course in course_group:
-        #                 if course in student_history:
-        #                     upper_div_electives_taken += 1
-        #                     print(f"Course taken: {course}")
-            
-        # else:
+        db = client["university"]  # Name of your MongoDB database
+        collection = db['majors']
+        query = {"major": major, "admission_year": year_of_admission}
 
+        db2 = client["course"]
+        collection2 = db2['classInfo']
+        class_codes = collection2.find({}, {"Class Code": 1, "_id": 0})
+        class_code_list = [class_code.get("Class Code") for class_code in class_codes]
+        # Filter out courses that are not in required courses or upper division electives
+
+        curriculum = collection.find_one(query)
+        
+        remaining_upper_div_courses = []
+        remaining_required_courses = []
+        upper_div_electives_taken = 0
+
+        if curriculum:
+            required_courses = curriculum.get("required_courses", [])
+            for course_group in required_courses:
+                if not any(course in student_history for course in course_group):
+                    remaining_required_courses.append(course_group)
+            upper_div_categories = curriculum.get("upper_div_categories", [])
+            for category_name, courses in upper_div_categories.items():
+                for course_group in courses:
+                    for course in course_group:
+                        if course in student_history:
+                            upper_div_electives_taken += 1
+                            print(f"Course taken: {course}")
+                        if course not in student_history:
+                            remaining_upper_div_courses.append(course)
+          
+            
+        else:
+            return jsonify({"success": False, "error": f"No curriculum found for {major} and year {year_of_admission}"}), 404
+        
+        # Remove courses from remaining_required_courses if they are already completed
+        # Check if '115a' is in the class code list
+        common_courses = [course for course in remaining_upper_div_courses if course in class_code_list]
+        # Get the prerequisites for the common courses
+        prerequisites_cursor = collection2.find({"Class Code": {"$in": common_courses}}, {"Class Code": 1, "Prereqs": 1, "_id": 0})
+        prerequisites = {doc["Class Code"]: doc.get("Prereqs", "None") for doc in prerequisites_cursor}
+
+        #generate the schedule
+        schedule = generate_schedule(courses=common_courses, student_history=student_history, required_courses=remaining_required_courses, upper_electives_taken=upper_div_electives_taken, upper_electives_needed=remaining_upper_div_courses, prerequisites=prerequisites)
+
+
+        #extract courses from the schedule
+        course_codes = re.findall(r'[A-Z]{2,4} \d{2,3}[A-Z]*', schedule)
+        # Fetch course information from MongoDB
+        course_info_list = []
+        for course_code in course_codes:
+            course_info = collection2.find_one({"Class Code": course_code}, {"_id": 0})
+            if course_info:
+                course_info_list.append(course_info)
+
+
+        # return jsonify({
+        #     "success": True,
+        #     "data": {
+        #     "major": major,
+        #     "courses_by_quarter": courses_by_quarter,
+        #     "upper_div_electives_taken": upper_div_electives_taken,
+        #     "remaining_upper_div_courses": remaining_upper_div_courses,
+        #     "remaining_required_courses": remaining_required_courses,
+        #     "recommended_courses": course_info_list
+        #     }
+        # }), 200
+        #print(schedule)
         return jsonify({
             "success": True,
             "data": {
                 "major": major,
-                "courses_by_quarter": courses_by_quarter
+                "courses_by_quarter": courses_by_quarter,
+                "upper_div_electives_taken": upper_div_electives_taken,
+                "remaining_upper_div_courses": remaining_upper_div_courses,
+                "remaining_required_courses": remaining_required_courses
             }
         }), 200
     except Exception as e:
