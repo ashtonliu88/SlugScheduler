@@ -181,13 +181,13 @@ def upload_pdf():
         courses_by_quarter = parse_courses(cleaned_lines)
         major = extract_major(cleaned_lines)
 
-        #studnet history in the form of course codes in list format
+        # Student history in the form of course codes in list format
         student_history = []
         for quarter, courses in courses_by_quarter.items():
             for course in courses:
                 student_history.append(course['course_code'])
         
-        #year of admission
+        # Year of admission
         year_of_admission = list(courses_by_quarter.keys())[0].split(" ")[0]
 
         # Extract the major from the cleaned lines
@@ -201,8 +201,7 @@ def upload_pdf():
         collection2 = db2['classInfo']
         class_codes = collection2.find({}, {"Class Code": 1, "_id": 0})
         class_code_list = [class_code.get("Class Code") for class_code in class_codes]
-        # Filter out courses that are not in required courses or upper division electives
-
+        
         curriculum = collection.find_one(query)
         
         remaining_upper_div_courses = []
@@ -223,24 +222,22 @@ def upload_pdf():
                             print(f"Course taken: {course}")
                         if course not in student_history:
                             remaining_upper_div_courses.append(course)
-          
-            
         else:
             return jsonify({"success": False, "error": f"No curriculum found for {major} and year {year_of_admission}"}), 404
         
-        # Remove courses from remaining_required_courses if they are already completed
-        # Check if '115a' is in the class code list
+        # Get common courses that are available this quarter
         common_courses = [course for course in remaining_upper_div_courses if course in class_code_list]
+        
         # Get the prerequisites for the common courses
         prerequisites_cursor = collection2.find({"Class Code": {"$in": common_courses}}, {"Class Code": 1, "Prereqs": 1, "_id": 0})
         prerequisites = {doc["Class Code"]: doc.get("Prereqs", "None") for doc in prerequisites_cursor}
 
-        #generate the schedule
+        # Generate the schedule
         schedule = generate_schedule(courses=common_courses, student_history=student_history, required_courses=remaining_required_courses, upper_electives_taken=upper_div_electives_taken, upper_electives_needed=remaining_upper_div_courses, prerequisites=prerequisites)
 
-
-        #extract courses from the schedule
+        # Extract courses from the schedule
         course_codes = re.findall(r'[A-Z]{2,4} \d{2,3}[A-Z]*', schedule)
+        
         # Fetch course information from MongoDB
         course_info_list = []
         for course_code in course_codes:
@@ -248,19 +245,6 @@ def upload_pdf():
             if course_info:
                 course_info_list.append(course_info)
 
-
-        # return jsonify({
-        #     "success": True,
-        #     "data": {
-        #     "major": major,
-        #     "courses_by_quarter": courses_by_quarter,
-        #     "upper_div_electives_taken": upper_div_electives_taken,
-        #     "remaining_upper_div_courses": remaining_upper_div_courses,
-        #     "remaining_required_courses": remaining_required_courses,
-        #     "recommended_courses": course_info_list
-        #     }
-        # }), 200
-        #print(schedule)
         return jsonify({
             "success": True,
             "data": {
@@ -268,7 +252,8 @@ def upload_pdf():
                 "courses_by_quarter": courses_by_quarter,
                 "upper_div_electives_taken": upper_div_electives_taken,
                 "remaining_upper_div_courses": remaining_upper_div_courses,
-                "remaining_required_courses": remaining_required_courses
+                "remaining_required_courses": remaining_required_courses,
+                "recommended_courses": course_info_list  # Add this line to include course information
             }
         }), 200
     except Exception as e:

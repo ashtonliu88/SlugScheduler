@@ -30,9 +30,30 @@ export default function Schedule({
   schedule,
   removeFromSchedule,
 }: { schedule: Course[]; removeFromSchedule: (course: Course) => void }) {
-  const parseTime = (timeStr: string) => {
-    const [hours, minutes] = timeStr.split(":").map(Number)
-    return hours + minutes / 60
+  const parseTime = (timeStr) => {
+    // Handle different time formats: "HH:MM" or "HH:MMAM/PM"
+    if (!timeStr) return 0;
+    
+    // For MongoDB format like "12:00PM-01:05PM"
+    if (timeStr.includes("AM") || timeStr.includes("PM")) {
+      // Extract the start time portion (before the dash)
+      const startTime = timeStr.split("-")[0].trim();
+      
+      // Parse 12-hour format
+      let hours = parseInt(startTime.match(/\d+/)[0]);
+      const minutes = parseInt(startTime.match(/:(\d+)/)[1] || 0);
+      const isPM = startTime.includes("PM");
+      
+      // Convert to 24-hour format
+      if (isPM && hours !== 12) hours += 12;
+      if (!isPM && hours === 12) hours = 0;
+      
+      return hours + minutes / 60;
+    } 
+    
+    // For original format "HH:MM"
+    const [hours, minutes] = timeStr.split(":").map(Number);
+    return hours + minutes / 60;
   }
 
   const getCourseTiming = (course: Course) => {

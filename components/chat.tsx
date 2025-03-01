@@ -5,13 +5,11 @@ import { Card } from "@/components/ui/card"
 import { PaperclipIcon as PaperClip } from "lucide-react"
 
 export default function Chat({ setCourses }) {
-  
-  
   const [messages, setMessages] = useState([])
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedFile, setSelectedFile] = useState(null)
 
   // Handle file selection and upload
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event) => {
     const file = event.target.files?.[0]
     if (!file) return
   
@@ -22,7 +20,7 @@ export default function Chat({ setCourses }) {
     formData.append("file", file)
   
     try {
-      const response = await fetch("http://127.0.0.1:5000/upload", { // Ensure correct API URL
+      const response = await fetch("http://127.0.0.1:5000/upload", {
         method: "POST",
         body: formData,
       })
@@ -44,15 +42,18 @@ export default function Chat({ setCourses }) {
         ...prev,
         { text: `Analyzed file: ${file.name} and found recommended courses.`, sender: "bot" },
       ])
+      
       const yearOfAdmission = Object.keys(result.data.courses_by_quarter)[0].split(" ")[0]
       setMessages((prev) => [
         ...prev,
         { text: `Extracted data: Major - ${result.data.major}, Year of Admission - ${yearOfAdmission}`, sender: "bot" },
       ])
+      
       const previousCourses = Object.values(result.data.courses_by_quarter)
         .flat()
-        .map((course: { course_code: string }) => course.course_code)
+        .map((course) => course.course_code)
         .join(", ") || "No courses found"
+      
       setMessages((prev) => [
         ...prev,
         { text: `Previous courses: ${previousCourses}`, sender: "bot" },
@@ -68,61 +69,72 @@ export default function Chat({ setCourses }) {
       const restUpperCourses = result.data.remaining_upper_div_courses
       setMessages((prev) => [
         ...prev,
-        { text: `Remaining upper division courses: ${restUpperCourses}`, sender: "bot" },
+        { text: `Remaining upper division courses: ${restUpperCourses.join(", ")}`, sender: "bot" },
       ])
 
       const remainRequiredCourses = result.data.remaining_required_courses
       setMessages((prev) => [
         ...prev,
-        { text: `Remaining required courses: ${remainRequiredCourses}`, sender: "bot" },
+        { text: `Remaining required courses: ${remainRequiredCourses.join(", ")}`, sender: "bot" },
       ])
 
-      
-
-      setCourses((prevCourses) => {
-        const courseTimings = [
-          { days: "MWF", time: "07:05 - 08:45" },
-          { days: "TTH", time: "09:00 - 10:30" },
-          { days: "MWF", time: "11:00 - 12:15" },
-        ]
-        
-        const newCourses = Array.from({ length: 3 }, (_, index) => ({
-          id: `CS${prevCourses.length + 101 + index}`,
-          name: `Computer Science ${prevCourses.length + 101 + index}`,
-          quarterOffered: "Fall 2024",
-          career: "Undergraduate",
-          grading: "Letter Grade",
-          classNumber: `${12345 + prevCourses.length + index}`,
-          type: "Lecture",
-          instructionMode: "In Person",
-          credits: 4,
-          generalEducation: ["Quantitative Reasoning"],
-          status: "Open",
-          availableSeats: 15,
-          enrollmentCapacity: 120,
-          enrolled: 105,
-          waitListCapacity: 20,
-          waitListTotal: 0,
-          description: "An introduction to computer science and programming.",
-          enrollmentRequirements: "None",
-          classNotes: "Laptop required for in-class exercises",
-          meetingInformation: {
-            ...courseTimings[(prevCourses.length + index) % courseTimings.length],
-            location: "Science Center 101",
-            instructor: "Dr. Smith",
-          },
-          associatedSections: [
-            {
-              type: "Lab",
-              number: `LA${index + 1}`,
-              days: "T",
-              time: "14:00 - 15:50",
-              location: "Computer Lab 204",
+      // Map MongoDB course data to the expected format
+      if (result.data.recommended_courses && result.data.recommended_courses.length > 0) {
+        const formattedCourses = result.data.recommended_courses.map(course => {
+          // Parse meeting information
+          let days = "";
+          let time = "";
+          let location = "";
+          
+          if (course["Days & Times"]) {
+            const meetingParts = course["Days & Times"].split(" ");
+            days = meetingParts[0];
+            time = meetingParts.slice(1).join(" ");
+          }
+          
+          return {
+            id: course["Class Code"],
+            name: course["Class Name"],
+            quarterOffered: "Winter 2025", // Based on Meeting Dates
+            career: course["Class Type"],
+            grading: course["Grading"],
+            classNumber: course["Class Number"],
+            type: course["Type"],
+            instructionMode: course["Instruction"],
+            credits: parseInt(course["Credits"]) || 5,
+            generalEducation: course["GE"] ? course["GE"].split("") : [],
+            status: course["Status"],
+            availableSeats: parseInt(course["Available Seats"]) || 0,
+            enrollmentCapacity: parseInt(course["Enrollment Capacity"]) || 0,
+            enrolled: parseInt(course["Enrolled"]) || 0,
+            waitListCapacity: parseInt(course["Wait List Capacity"]) || 0,
+            waitListTotal: parseInt(course["Wait List Total"]) || 0,
+            description: course["Description"] || "No description available.",
+            enrollmentRequirements: course["Prereqs"] || "None",
+            classNotes: "",
+            meetingInformation: {
+              days: days,
+              time: time,
+              location: course["Room"] || "TBA",
+              instructor: course["Instructors"] || "TBA",
             },
-          ],
-        }))
-        return [...prevCourses, ...newCourses]
-      })
+            associatedSections: []
+          }
+        });
+        
+        // Set the formatted courses
+        setCourses(formattedCourses);
+        
+        setMessages((prev) => [
+          ...prev,
+          { text: `Found ${formattedCourses.length} recommended courses based on your transcript.`, sender: "bot" },
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          { text: "No recommended courses found for your major and requirements.", sender: "bot" },
+        ]);
+      }
     } catch (error) {
       console.error("Error uploading file:", error)
       setMessages((prev) => [
@@ -132,8 +144,6 @@ export default function Chat({ setCourses }) {
     }
   }
   
-  
-
   return (
     <div className="flex flex-col h-full bg-[#1b1c1d]">
       <div className="flex-1 overflow-auto p-4 space-y-4">
