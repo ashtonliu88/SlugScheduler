@@ -159,6 +159,35 @@ def generate_schedule(courses, student_history, required_courses, upper_elective
 
     return response_message
 
+def extract_major_and_type(degree):
+    degree = degree.strip()
+
+    pattern = (
+        r'^(?:'
+        r'(BS|BA|B\.S\.|B\.A\.|Bachelor of Science|Bachelor of Arts)\s*(in\s*)?|'
+        r'()'
+        r')'
+        r'([A-Za-z\s]+?)'
+        r'(?:\s*\((BS|BA|B\.S\.|B\.A\.)\))?$'
+    )
+    
+    match = re.match(pattern, degree, re.IGNORECASE)
+
+    if not match:
+        return {"major": degree, "type": "Unknown"}
+
+    degree_type, in_word, _, major, degree_suffix = match.groups()
+
+    degree_type = degree_type or degree_suffix
+    if degree_type:
+        degree_type = degree_type.replace('.', '').upper()
+    else:
+        degree_type = 'Unknown'
+
+    major = major.strip().title()
+
+    return {"major": major, "type": degree_type}
+
 @app.route('/upload', methods=['POST'])
 def upload_pdf():
     """Handle file upload and processing."""
@@ -192,6 +221,7 @@ def upload_pdf():
 
         # Extract the major from the cleaned lines
         major = extract_major(cleaned_lines)
+        print(extract_major_and_type('BS in Computer Engineering'))
 
         db = client["university"]  # Name of your MongoDB database
         collection = db['majors']
