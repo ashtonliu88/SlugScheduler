@@ -1,73 +1,85 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ChevronLeft, ChevronRight, CalendarIcon, X } from "lucide-react"
+import { toast } from "@/components/ui/use-toast"
 
-// Mock schedule data
-const mockSchedule = [
-  {
-    id: "CSE101",
-    title: "Intro to Data Structures",
-    day: "Monday",
-    startTime: "10:00",
-    endTime: "11:45",
-    location: "Engineering 2, Room 192",
-  },
-  {
-    id: "CSE101",
-    title: "Intro to Data Structures",
-    day: "Wednesday",
-    startTime: "10:00",
-    endTime: "11:45",
-    location: "Engineering 2, Room 192",
-  },
-  {
-    id: "MATH23A",
-    title: "Vector Calculus",
-    day: "Tuesday",
-    startTime: "13:00",
-    endTime: "14:45",
-    location: "McHenry Library, Room 1240",
-  },
-  {
-    id: "MATH23A",
-    title: "Vector Calculus",
-    day: "Thursday",
-    startTime: "13:00",
-    endTime: "14:45",
-    location: "McHenry Library, Room 1240",
-  },
-  {
-    id: "STAT131",
-    title: "Intro to Probability Theory",
-    day: "Monday",
-    startTime: "15:00",
-    endTime: "16:45",
-    location: "Physical Sciences, Room 110",
-  },
-  {
-    id: "STAT131",
-    title: "Intro to Probability Theory",
-    day: "Friday",
-    startTime: "15:00",
-    endTime: "16:45",
-    location: "Physical Sciences, Room 110",
-  },
-]
-
-const terms = ["Fall 2024", "Winter 2025", "Spring 2025", "Summer 2025"]
-const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
-const timeSlots = Array.from({ length: 13 }, (_, i) => `${i + 8}:00`)
+interface CourseSchedule {
+  id: string
+  title: string
+  day: string
+  startTime: string
+  endTime: string
+  location: string
+}
 
 export default function CalendarView() {
   const [currentTerm, setCurrentTerm] = useState("Winter 2025")
-  const [selectedCourses, setSelectedCourses] = useState<string[]>(["CSE101", "MATH23A", "STAT131"])
+  const [selectedCourses, setSelectedCourses] = useState<string[]>([])
+  const [courseSchedule, setCourseSchedule] = useState<CourseSchedule[]>([])
+
+  const terms = ["Fall 2024", "Winter 2025", "Spring 2025", "Summer 2025"]
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+  const timeSlots = Array.from({ length: 13 }, (_, i) => `${i + 8}:00`)
+
+  useEffect(() => {
+    // Fetch recommended courses when the component mounts
+    fetch('/upload')
+      .then(response => response.json())
+      .then(data => {
+        if (data.success && data.data.recommended_courses) {
+          // Extract course information from the recommended courses
+          const recommendedCourseCodes = data.data.recommended_courses.map((course: any) => course['Class Code'])
+          setSelectedCourses(recommendedCourseCodes)
+
+          // Transform backend course data to match our schedule interface
+          const transformedSchedule = data.data.recommended_courses.flatMap((course: any) => {
+            // Note: You'll need to adjust this transformation based on your actual backend data
+            return [
+              {
+                id: course['Class Code'],
+                title: course['Course Name'],
+                day: 'Monday', // Example day, replace with actual data
+                startTime: '10:00',
+                endTime: '11:45',
+                location: course['Location'] || 'TBD'
+              },
+              {
+                id: course['Class Code'],
+                title: course['Course Name'],
+                day: 'Wednesday', // Example day, replace with actual data
+                startTime: '10:00',
+                endTime: '11:45',
+                location: course['Location'] || 'TBD'
+              }
+            ]
+          })
+
+          setCourseSchedule(transformedSchedule)
+
+          toast({
+            title: "Courses Loaded",
+            description: `Loaded ${recommendedCourseCodes.length} recommended courses`,
+            variant: "default"
+          })
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching courses:', error)
+        toast({
+          title: "Error",
+          description: "Could not fetch recommended courses",
+          variant: "destructive"
+        })
+      })
+  }, [])
 
   const handleRemoveCourse = (courseId: string) => {
     setSelectedCourses(selectedCourses.filter((id) => id !== courseId))
+    setCourseSchedule(courseSchedule.filter((course) => course.id !== courseId))
   }
 
   const handlePrevTerm = () => {
@@ -87,13 +99,13 @@ export default function CalendarView() {
   // Group schedule items by course ID
   const courseGroups = selectedCourses.reduce(
     (acc, courseId) => {
-      const courseSchedule = mockSchedule.filter((item) => item.id === courseId)
-      if (courseSchedule.length > 0) {
-        acc[courseId] = courseSchedule
+      const courseScheduleItems = courseSchedule.filter((item) => item.id === courseId)
+      if (courseScheduleItems.length > 0) {
+        acc[courseId] = courseScheduleItems
       }
       return acc
     },
-    {} as Record<string, typeof mockSchedule>,
+    {} as Record<string, CourseSchedule[]>,
   )
 
   return (

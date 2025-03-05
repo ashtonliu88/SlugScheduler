@@ -221,11 +221,15 @@ def upload_pdf():
 
         # Extract the major from the cleaned lines
         major = extract_major(cleaned_lines)
-        print(extract_major_and_type('BS in Computer Engineering'))
+        major_info = extract_major_and_type(major)
+        major_name = major_info["major"]
+        major_type = major_info["type"]
+        print(major_name)
+        print(major_type)
 
         db = client["university"]  # Name of your MongoDB database
         collection = db['majors']
-        query = {"major": major, "admission_year": year_of_admission}
+        query = {"major": major_name, "admission_year": year_of_admission, "type": major_type}
 
         db2 = client["course"]
         collection2 = db2['classInfo']
@@ -278,7 +282,8 @@ def upload_pdf():
         return jsonify({
             "success": True,
             "data": {
-                "major": major,
+                "major": major_name,
+                "type": major_type,
                 "courses_by_quarter": courses_by_quarter,
                 "upper_div_electives_taken": upper_div_electives_taken,
                 "remaining_upper_div_courses": remaining_upper_div_courses,

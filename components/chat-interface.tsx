@@ -3,60 +3,181 @@
 import type React from "react"
 
 import { useState } from "react"
-import { useChat } from "ai/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Send, Upload, Bot, User } from "lucide-react"
+import { Send, Upload, Bot, User, FileCheck, BookOpen, GraduationCap } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 
 export default function ChatInterface() {
   const [transcriptUploaded, setTranscriptUploaded] = useState(false)
-  const { messages, input, handleInputChange, handleSubmit } = useChat({
-    api: "/api/chat",
-  })
+  const [messages, setMessages] = useState<{ role: string, content: string, type?: string }[]>([])
+  const [input, setInput] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // In a real app, you would process the file here
     if (e.target.files && e.target.files.length > 0) {
-      setTranscriptUploaded(true)
-      // You would send the file to your backend here
+      const file = e.target.files[0]
+      
+      // Create FormData for file upload
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      fetch('http://127.0.0.1:5000/upload', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (!data.success) {
+          // Handle server-side errors
+          setMessages(prevMessages => [
+            ...prevMessages, 
+            { 
+              role: 'system', 
+              content: `❌ Transcript Upload Error: ${data.error || 'Unknown error occurred'}`, 
+              type: 'file-upload-error' 
+            }
+          ])
+          return
+        }
+        
+        console.log('File uploaded successfully', data)
+        
+        // Update states
+        setTranscriptUploaded(true)
+        setUploadDialogOpen(false)
+        
+        // Add a system message about file upload to chat
+        setMessages(prevMessages => [
+          ...prevMessages, 
+          { 
+            role: 'system', 
+            content: `Transcript uploaded: ${file.name}`, 
+            type: 'file-upload' 
+          }
+        ])
+
+        // Detailed parsing results message
+        if (data.success && data.data) {
+          const parsedData = data.data
+          
+          // Construct a detailed message about parsed transcript
+          const detailedMessage = `
+            🎓 Transcript Analysis:
+            • Major: ${parsedData.major} (${parsedData.type})
+            • Upper Division Electives Taken: ${parsedData.upper_div_electives_taken}
+            • Remaining Required Courses: ${parsedData.remaining_required_courses.flat().length}
+            • Remaining Upper Division Courses: ${parsedData.remaining_upper_div_courses.length}
+          `
+
+          setMessages(prevMessages => [
+            ...prevMessages, 
+            { 
+              role: 'assistant', 
+              content: detailedMessage,
+              type: 'transcript-analysis' 
+            }
+          ])
+        }
+      })
+      .catch(error => {
+        console.error('Error uploading file:', error)
+        // Optionally add an error message to chat
+        setMessages(prevMessages => [
+          ...prevMessages, 
+          { 
+            role: 'system', 
+            content: `Error uploading transcript: ${error.message}`, 
+            type: 'file-upload-error' 
+          }
+        ])
+      })
     }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!input.trim()) return
+
+    // Add user message to chat
+    const newMessages = [...messages, { role: 'user', content: input }]
+    setMessages(newMessages)
+    setInput("")
+    setIsLoading(true)
+
+    try {
+      const response = await fetch('http://127.0.0.1:5000/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: input })
+      })
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok')
+      }
+
+      const data = await response.json()
+      
+      // Add assistant's response to chat
+      setMessages(prevMessages => [
+        ...prevMessages, 
+        { role: 'assistant', content: data.response }
+      ])
+    } catch (error) {
+      console.error('Error sending message:', error)
+      setMessages(prevMessages => [
+        ...prevMessages, 
+        { role: 'assistant', content: 'Sorry, there was an error processing your request.' }
+      ])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value)
   }
 
   return (
     <div className="flex flex-col h-[70vh]">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold">Course Assistant</h2>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="outline" className="flex gap-2">
-              <Upload size={16} />
-              Upload Transcript
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Upload Your Transcript</DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="transcript">
-                  Upload your academic transcript to get personalized course recommendations
-                </Label>
-                <Input id="transcript" type="file" accept=".pdf,.doc,.docx" onChange={handleFileUpload} />
+        {!transcriptUploaded && (
+          <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="flex gap-2">
+                <Upload size={16} />
+                Upload Transcript
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Upload Your Transcript</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="transcript">
+                    Upload your academic transcript to get personalized course recommendations
+                  </Label>
+                  <Input 
+                    id="transcript" 
+                    type="file" 
+                    accept=".pdf,.doc,.docx" 
+                    onChange={handleFileUpload} 
+                  />
+                </div>
               </div>
-              {transcriptUploaded && (
-                <p className="text-green-600 text-sm">
-                  Transcript uploaded successfully! The assistant can now provide personalized recommendations.
-                </p>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto mb-4 p-4 border rounded-lg">
@@ -71,22 +192,50 @@ export default function ChatInterface() {
         ) : (
           <div className="space-y-4">
             {messages.map((message, index) => (
-              <Card key={index} className={`${message.role === "user" ? "bg-blue-50" : "bg-white"}`}>
+              <Card 
+                key={index} 
+                className={`
+                  ${message.role === "user" ? "bg-blue-50" : 
+                    message.role === "system" && message.type === "file-upload" ? "bg-green-50" : 
+                    message.role === "assistant" && message.type === "transcript-analysis" ? "bg-purple-50" :
+                    "bg-white"}
+                `}
+              >
                 <CardContent className="p-4">
                   <div className="flex gap-3">
-                    <Avatar className={message.role === "user" ? "bg-blue-100" : "bg-yellow-100"}>
+                    <Avatar 
+                      className={
+                        message.role === "user" ? "bg-blue-100" : 
+                        message.role === "system" && message.type === "file-upload" ? "bg-green-100" : 
+                        message.role === "assistant" && message.type === "transcript-analysis" ? "bg-purple-100" :
+                        "bg-yellow-100"
+                      }
+                    >
                       <AvatarFallback>
-                        {message.role === "user" ? <User size={18} /> : <Bot size={18} />}
+                        {message.role === "user" ? <User size={18} /> : 
+                         message.role === "system" && message.type === "file-upload" ? <FileCheck size={18} /> : 
+                         message.role === "assistant" && message.type === "transcript-analysis" ? <GraduationCap size={18} /> : 
+                         <Bot size={18} />}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium mb-1">{message.role === "user" ? "You" : "Course Assistant"}</p>
-                      <div className="text-sm">{message.content}</div>
+                      <p className="font-medium mb-1">
+                        {message.role === "user" ? "You" : 
+                         message.role === "system" && message.type === "file-upload" ? "System" : 
+                         message.role === "assistant" && message.type === "transcript-analysis" ? "Transcript Analysis" :
+                         "Course Assistant"}
+                      </p>
+                      <div className="text-sm whitespace-pre-wrap">{message.content}</div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             ))}
+          </div>
+        )}
+        {isLoading && (
+          <div className="flex justify-center items-center mt-4">
+            <p>Loading...</p>
           </div>
         )}
       </div>
@@ -99,11 +248,10 @@ export default function ChatInterface() {
           className="flex-1 resize-none"
           rows={2}
         />
-        <Button type="submit" className="self-end bg-[#003c6c] hover:bg-[#00284a]">
+        <Button type="submit" className="self-end bg-[#003c6c] hover:bg-[#00284a]" disabled={isLoading}>
           <Send size={18} />
         </Button>
       </form>
     </div>
   )
 }
-
