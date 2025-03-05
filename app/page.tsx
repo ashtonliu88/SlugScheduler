@@ -6,6 +6,8 @@ import Chat from "@/components/chat"
 import CourseRecommendations from "@/components/course-recommendations"
 import Schedule from "@/components/schedule"
 import type { Course } from "@/types/course"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
 
 export default function Home() {
   const [courses, setCourses] = useState<Course[]>([])
@@ -67,26 +69,57 @@ export default function Home() {
   }
 
   return (
-    <DragDropContext onDragEnd={onDragEnd}>
-      <main className="flex h-screen overflow-hidden bg-gradient-to-br from-[#1b1c1d] via-[#313638] to-[#1c5162] text-foreground">
-        <div className="w-1/3 flex flex-col border-r border-black">
-          <Chat setCourses={setCourses} />
+    // <DragDropContext onDragEnd={onDragEnd}>
+    //   <main className="flex h-screen overflow-hidden bg-gradient-to-br from-[#1b1c1d] via-[#313638] to-[#1c5162] text-foreground">
+    //     <div className="w-1/3 flex flex-col border-r border-black">
+    //       <Chat setCourses={setCourses} />
+    //     </div>
+    //     <div className="w-2/3 flex flex-col">
+    //       <div className="h-1/3 overflow-y-auto border-b border-black bg-[#1c5162]/20">
+    //         <CourseRecommendations
+    //           courses={courses}
+    //           addToSchedule={addToSchedule}
+    //           removeFromRecommendations={removeFromRecommendations}
+    //           removeFromRecommendationsOnly={removeFromRecommendationsOnly}
+    //         />
+    //       </div>
+    //       <div className="flex-1 overflow-y-auto bg-[#313638]/30">
+    //         <Schedule schedule={schedule} removeFromSchedule={removeFromSchedule} />
+    //       </div>
+    //     </div>
+    //   </main>
+    // </DragDropContext>
+    <div className="min-h-screen bg-slate-50">
+      <header className="bg-[#003c6c] text-white p-4 shadow-md">
+        <div className="container mx-auto flex items-center gap-2">
+          <img src="/placeholder.svg?height=40&width=40" alt="UCSC Logo" className="h-10 w-10" />
+          <h1 className="text-xl font-bold">UCSC Course Recommendation System</h1>
         </div>
-        <div className="w-2/3 flex flex-col">
-          <div className="h-1/3 overflow-y-auto border-b border-black bg-[#1c5162]/20">
-            <CourseRecommendations
-              courses={courses}
-              addToSchedule={addToSchedule}
-              removeFromRecommendations={removeFromRecommendations}
-              removeFromRecommendationsOnly={removeFromRecommendationsOnly}
-            />
-          </div>
-          <div className="flex-1 overflow-y-auto bg-[#313638]/30">
-            <Schedule schedule={schedule} removeFromSchedule={removeFromSchedule} />
-          </div>
-        </div>
+      </header>
+
+      <main className="container mx-auto py-6 px-4">
+        <Tabs defaultValue="chat" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-8">
+            <TabsTrigger value="chat">Chat Assistant</TabsTrigger>
+            <TabsTrigger value="calendar">My Schedule</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="chat" className="p-4 bg-white rounded-lg shadow">
+            <Chat />
+          </TabsContent>
+
+          <TabsContent value="calendar" className="p-4 bg-white rounded-lg shadow">
+            <Schedule />
+          </TabsContent>
+        </Tabs>
       </main>
-    </DragDropContext>
+
+      <footer className="bg-[#003c6c] text-white p-4 mt-8">
+        <div className="container mx-auto text-center">
+          <p>© {new Date().getFullYear()} UCSC Course Recommendation System</p>
+        </div>
+      </footer>
+    </div>
   )
 }
 

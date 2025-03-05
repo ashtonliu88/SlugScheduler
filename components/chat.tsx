@@ -1,182 +1,105 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
-import { Card } from "@/components/ui/card"
-import { PaperclipIcon as PaperClip } from "lucide-react"
+// import { useChat } from "ai/react"
+import { Button } from "@/components/ui/button"
+// import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Card, CardContent } from "@/components/ui/card"
+// import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Send, Upload, Bot, User } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
-export default function Chat({ setCourses }) {
-  const [messages, setMessages] = useState([])
-  const [selectedFile, setSelectedFile] = useState(null)
+export default function ChatInterface() {
+  const [transcriptUploaded, setTranscriptUploaded] = useState(false)
+  // const { messages, input, handleInputChange, handleSubmit } = useChat({
+  //   api: "/api/chat",
+  // })
 
-  // Handle file selection and upload
-  const handleFileUpload = async (event) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-  
-    setSelectedFile(file)
-    setMessages([...messages, { text: `Uploaded file: ${file.name}`, sender: "user" }])
-  
-    const formData = new FormData()
-    formData.append("file", file)
-  
-    try {
-      const response = await fetch("http://127.0.0.1:5000/upload", {
-        method: "POST",
-        body: formData,
-      })
-  
-      // Ensure the response is valid JSON
-      const text = await response.text()
-      let result
-      try {
-        result = JSON.parse(text)
-      } catch {
-        throw new Error(`Invalid JSON response: ${text.substring(0, 200)}`)
-      }
-  
-      if (!response.ok) {
-        throw new Error(result.error || "Unknown error")
-      }
-  
-      setMessages((prev) => [
-        ...prev,
-        { text: `Analyzed file: ${file.name} and found recommended courses.`, sender: "bot" },
-      ])
-      
-      const yearOfAdmission = Object.keys(result.data.courses_by_quarter)[0].split(" ")[0]
-      setMessages((prev) => [
-        ...prev,
-        { text: `Extracted data: Major - ${result.data.major}, Year of Admission - ${yearOfAdmission}`, sender: "bot" },
-      ])
-      
-      const previousCourses = Object.values(result.data.courses_by_quarter)
-        .flat()
-        .map((course) => course.course_code)
-        .join(", ") || "No courses found"
-      
-      setMessages((prev) => [
-        ...prev,
-        { text: `Previous courses: ${previousCourses}`, sender: "bot" },
-      ])
-      
-      //output how many upper courses taken
-      const numUpperCourses = result.data.upper_div_electives_taken
-      setMessages((prev) => [
-        ...prev,
-        { text: `Number of upper division electives taken: ${numUpperCourses}`, sender: "bot" },
-      ])
-      
-      const restUpperCourses = result.data.remaining_upper_div_courses
-      setMessages((prev) => [
-        ...prev,
-        { text: `Remaining upper division courses: ${restUpperCourses.join(", ")}`, sender: "bot" },
-      ])
-
-      const remainRequiredCourses = result.data.remaining_required_courses
-      setMessages((prev) => [
-        ...prev,
-        { text: `Remaining required courses: ${remainRequiredCourses.join(", ")}`, sender: "bot" },
-      ])
-
-      // Map MongoDB course data to the expected format
-      if (result.data.recommended_courses && result.data.recommended_courses.length > 0) {
-        const formattedCourses = result.data.recommended_courses.map(course => {
-          // Parse meeting information
-          let days = "";
-          let time = "";
-          let location = "";
-          
-          if (course["Days & Times"]) {
-            const meetingParts = course["Days & Times"].split(" ");
-            days = meetingParts[0];
-            time = meetingParts.slice(1).join(" ");
-          }
-          
-          return {
-            id: course["Class Code"],
-            name: course["Class Name"],
-            quarterOffered: "Winter 2025", // Based on Meeting Dates
-            career: course["Class Type"],
-            grading: course["Grading"],
-            classNumber: course["Class Number"],
-            type: course["Type"],
-            instructionMode: course["Instruction"],
-            credits: parseInt(course["Credits"]) || 5,
-            generalEducation: course["GE"] ? course["GE"].split("") : [],
-            status: course["Status"],
-            availableSeats: parseInt(course["Available Seats"]) || 0,
-            enrollmentCapacity: parseInt(course["Enrollment Capacity"]) || 0,
-            enrolled: parseInt(course["Enrolled"]) || 0,
-            waitListCapacity: parseInt(course["Wait List Capacity"]) || 0,
-            waitListTotal: parseInt(course["Wait List Total"]) || 0,
-            description: course["Description"] || "No description available.",
-            enrollmentRequirements: course["Prereqs"] || "None",
-            classNotes: "",
-            meetingInformation: {
-              days: days,
-              time: time,
-              location: course["Room"] || "TBA",
-              instructor: course["Instructors"] || "TBA",
-            },
-            associatedSections: []
-          }
-        });
-        
-        // Set the formatted courses
-        setCourses(formattedCourses);
-        
-        setMessages((prev) => [
-          ...prev,
-          { text: `Found ${formattedCourses.length} recommended courses based on your transcript.`, sender: "bot" },
-        ]);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { text: "No recommended courses found for your major and requirements.", sender: "bot" },
-        ]);
-      }
-    } catch (error) {
-      console.error("Error uploading file:", error)
-      setMessages((prev) => [
-        ...prev,
-        { text: `Error processing file: ${error.message}`, sender: "bot" },
-      ])
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // In a real app, you would process the file here
+    if (e.target.files && e.target.files.length > 0) {
+      setTranscriptUploaded(true)
+      // You would send the file to your backend here
     }
   }
-  
+
   return (
-    <div className="flex flex-col h-full bg-[#1b1c1d]">
-      <div className="flex-1 overflow-auto p-4 space-y-4">
-        {messages.map((message, index) => (
-          <Card
-            key={index}
-            className={`p-3 max-w-[80%] ${
-              message.sender === "user" ? "ml-auto bg-[#348AA7] text-[#e7e7e7]" : "bg-[#1c5162] text-[#e7e7e7]"
-            } shadow-lg transition-all duration-300 ease-in-out hover:shadow-xl`}
-          >
-            {message.text}
-          </Card>
-        ))}
+    <div className="flex flex-col h-[70vh]">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold">Course Assistant</h2>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="outline" className="flex gap-2">
+              <Upload size={16} />
+              Upload Transcript
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Upload Your Transcript</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Textarea id="transcript" /> {/*  type="file" accept=".pdf,.doc,.docx"  onChange={handleFileUpload} */}
+              </div>
+              {transcriptUploaded && (
+                <p className="text-green-600 text-sm">
+                  Transcript uploaded successfully! The assistant can now provide personalized recommendations.
+                </p>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
-      <div className="p-4 border-t border-black flex flex-col items-center gap-2">
-        {/* File Input */}
-        <input
-          type="file"
-          id="file-upload"
-          className="hidden"
-          onChange={handleFileUpload}
-          accept=".pdf" // Restrict to PDF files
-        />
-        {/* Button to Trigger File Input */}
-        <label htmlFor="file-upload" className="cursor-pointer">
-          <div className="rounded-full bg-[#313638] text-[#e7e7e7] hover:bg-[#1c5162] border-black p-4">
-            <PaperClip className="h-5 w-5" />
-            <span className="sr-only">Upload transcript</span>
+
+      {/* <div className="flex-1 overflow-y-auto mb-4 p-4 border rounded-lg">
+        {messages.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-center text-gray-500">
+            <Bot size={48} className="mb-4 text-[#003c6c]" />
+            <h3 className="text-lg font-medium">Welcome to the UCSC Course Assistant!</h3>
+            <p className="max-w-md mt-2">
+              Ask me about courses, requirements, or upload your transcript for personalized recommendations.
+            </p>
           </div>
-        </label>
-        {/* Display Selected File Name */}
-        {selectedFile && <span className="text-[#e7e7e7] mt-2">Selected file: {selectedFile.name}</span>}
-      </div>
+        ) : (
+          <div className="space-y-4">
+            {messages.map((message, index) => (
+              <Card key={index} className={`${message.role === "user" ? "bg-blue-50" : "bg-white"}`}>
+                <CardContent className="p-4">
+                  <div className="flex gap-3">
+                    <Avatar className={message.role === "user" ? "bg-blue-100" : "bg-yellow-100"}>
+                      <AvatarFallback>
+                        {message.role === "user" ? <User size={18} /> : <Bot size={18} />}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium mb-1">{message.role === "user" ? "You" : "Course Assistant"}</p>
+                      <div className="text-sm">{message.content}</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div> */}
+
+      <form className="flex gap-2">
+        <Textarea
+          // value={input}
+          // onChange={handleInputChange}
+          placeholder="Ask about courses, requirements, or recommendations..."
+          className="flex-1 resize-none"
+          rows={2}
+        />
+        <Button type="submit" className="self-end bg-[#003c6c] hover:bg-[#00284a]">
+          <Send size={18} />
+        </Button>
+      </form>
     </div>
   )
 }
+
