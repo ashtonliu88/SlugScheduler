@@ -1,159 +1,187 @@
 "use client"
+
+import { useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { X } from "lucide-react"
-import type { Course } from "@/types/course"
+import { Badge } from "@/components/ui/badge"
+import { ChevronLeft, ChevronRight, CalendarIcon, X } from "lucide-react"
 
-const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
-const HOURS = Array.from({ length: 16 }, (_, i) => i + 7) // 7 AM to 10 PM
-
-const DAY_MAP = {
-  M: "Monday",
-  T: "Tuesday",
-  W: "Wednesday",
-  H: "Thursday",
-  F: "Friday",
-}
-
-// Array of colors for course blocks
-const COURSE_COLORS = [
-  "bg-[#4a90e2]", // Blue
-  "bg-[#50c878]", // Emerald
-  "bg-[#f39c12]", // Orange
-  "bg-[#e74c3c]", // Red
-  "bg-[#9b59b6]", // Purple
-  "bg-[#1abc9c]", // Turquoise
-  "bg-[#f1c40f]", // Yellow
-  "bg-[#e67e22]", // Carrot
+// Mock schedule data
+const mockSchedule = [
+  {
+    id: "CSE101",
+    title: "Intro to Data Structures",
+    day: "Monday",
+    startTime: "10:00",
+    endTime: "11:45",
+    location: "Engineering 2, Room 192",
+  },
+  {
+    id: "CSE101",
+    title: "Intro to Data Structures",
+    day: "Wednesday",
+    startTime: "10:00",
+    endTime: "11:45",
+    location: "Engineering 2, Room 192",
+  },
+  {
+    id: "MATH23A",
+    title: "Vector Calculus",
+    day: "Tuesday",
+    startTime: "13:00",
+    endTime: "14:45",
+    location: "McHenry Library, Room 1240",
+  },
+  {
+    id: "MATH23A",
+    title: "Vector Calculus",
+    day: "Thursday",
+    startTime: "13:00",
+    endTime: "14:45",
+    location: "McHenry Library, Room 1240",
+  },
+  {
+    id: "STAT131",
+    title: "Intro to Probability Theory",
+    day: "Monday",
+    startTime: "15:00",
+    endTime: "16:45",
+    location: "Physical Sciences, Room 110",
+  },
+  {
+    id: "STAT131",
+    title: "Intro to Probability Theory",
+    day: "Friday",
+    startTime: "15:00",
+    endTime: "16:45",
+    location: "Physical Sciences, Room 110",
+  },
 ]
 
-export default function Schedule({
-  schedule,
-  removeFromSchedule,
-}: { schedule: Course[]; removeFromSchedule: (course: Course) => void }) {
-  const parseTime = (timeStr) => {
-    // Handle different time formats: "HH:MM" or "HH:MMAM/PM"
-    if (!timeStr) return 0;
-    
-    // For MongoDB format like "12:00PM-01:05PM"
-    if (timeStr.includes("AM") || timeStr.includes("PM")) {
-      // Extract the start time portion (before the dash)
-      const startTime = timeStr.split("-")[0].trim();
-      
-      // Parse 12-hour format
-      let hours = parseInt(startTime.match(/\d+/)[0]);
-      const minutes = parseInt(startTime.match(/:(\d+)/)[1] || 0);
-      const isPM = startTime.includes("PM");
-      
-      // Convert to 24-hour format
-      if (isPM && hours !== 12) hours += 12;
-      if (!isPM && hours === 12) hours = 0;
-      
-      return hours + minutes / 60;
-    } 
-    
-    // For original format "HH:MM"
-    const [hours, minutes] = timeStr.split(":").map(Number);
-    return hours + minutes / 60;
+const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+const timeSlots = Array.from({ length: 13 }, (_, i) => `${i + 8}:00`)
+
+export default function CalendarView() {
+  const [currentTerm, setCurrentTerm] = useState("Fall 2023")
+  const [selectedCourses, setSelectedCourses] = useState<string[]>(["CSE101", "MATH23A", "STAT131"])
+
+  const handleRemoveCourse = (courseId: string) => {
+    setSelectedCourses(selectedCourses.filter((id) => id !== courseId))
   }
 
-  const getCourseTiming = (course: Course) => {
-    const [startTime, endTime] = course.meetingInformation.time.split(" - ")
-    return {
-      start: parseTime(startTime),
-      end: parseTime(endTime),
-      days: course.meetingInformation.days
-        .split("")
-        .map((day) => {
-          if (day === "T" && course.meetingInformation.days.includes("H")) {
-            return course.meetingInformation.days.includes("T", course.meetingInformation.days.indexOf("T") + 1)
-              ? "Tuesday"
-              : null
-          }
-          return DAY_MAP[day] || null
-        })
-        .filter(Boolean) as string[],
-    }
-  }
-
-  const getGridPosition = (time: number) => {
-    const hour = Math.floor(time)
-    const minute = (time - hour) * 60
-    return {
-      top: `${((hour - 7) * 60 + minute) * 0.8}px`, // 0.8px per minute
-      height: `${48}px`, // Default height for one hour
-    }
-  }
-
-  const getCourseStyle = (course: Course) => {
-    const timing = getCourseTiming(course)
-    const startPos = getGridPosition(timing.start)
-    const duration = (timing.end - timing.start) * 60 // Duration in minutes
-    const colorIndex = Number.parseInt(course.id.replace(/\D/g, "")) % COURSE_COLORS.length
-    return {
-      top: startPos.top,
-      height: `${duration * 0.8}px`, // 0.8px per minute
-      backgroundColor: COURSE_COLORS[colorIndex].replace("bg-", ""),
-    }
-  }
+  // Group schedule items by course ID
+  const courseGroups = selectedCourses.reduce(
+    (acc, courseId) => {
+      const courseSchedule = mockSchedule.filter((item) => item.id === courseId)
+      if (courseSchedule.length > 0) {
+        acc[courseId] = courseSchedule
+      }
+      return acc
+    },
+    {} as Record<string, typeof mockSchedule>,
+  )
 
   return (
-    <div className="flex-1 p-4 overflow-auto bg-[#313638]">
-      <h2 className="text-2xl font-bold mb-4 text-[#e7e7e7]">Your Schedule</h2>
-      <div className="bg-[#1b1c1d] rounded-lg shadow-lg overflow-hidden">
-        <div className="grid grid-cols-6 gap-[1px] bg-black">
-          <div className="col-span-1 bg-transparent"></div>
-          {DAYS.map((day) => (
-            <div key={day} className="text-center py-3 font-medium bg-[#1c5162] text-[#e7e7e7]">
-              {day}
-            </div>
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon">
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <CalendarIcon className="h-5 w-5" />
+            {currentTerm}
+          </h2>
+          <Button variant="outline" size="icon">
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="flex gap-2">
+          {Object.keys(courseGroups).map((courseId) => (
+            <Badge key={courseId} variant="outline" className="flex items-center gap-1 px-2 py-1">
+              {courseId}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-4 w-4 ml-1 p-0"
+                onClick={() => handleRemoveCourse(courseId)}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </Badge>
           ))}
+        </div>
+      </div>
 
-          <div className="col-span-6 grid grid-cols-6">
-            <div className="relative" style={{ height: `${16 * 60 * 0.8}px` }}>
-              {HOURS.map((hour) => (
-                <div
-                  key={hour}
-                  className="absolute w-full border-t border-black text-sm text-right pr-2 text-[#e7e7e7]/70"
-                  style={{ top: `${(hour - 7) * 60 * 0.8}px` }}
-                >
-                  {hour % 12 || 12}
+      <Card>
+        <CardHeader>
+          <CardTitle>Weekly Schedule</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_1fr] gap-1 overflow-x-auto">
+            {/* Time column */}
+            <div className="col-span-1">
+              <div className="h-12 border-b flex items-end justify-center font-medium">Time</div>
+              {timeSlots.map((time, index) => (
+                <div key={index} className="h-20 border-b flex items-center justify-center text-sm text-gray-500">
+                  {time}
                 </div>
               ))}
             </div>
 
-            {DAYS.map((day) => (
-              <div key={day} className="relative border-l border-black" style={{ height: `${16 * 60 * 0.8}px` }}>
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#1c5162]/10 opacity-50 pointer-events-none"></div>
-                {schedule
-                  .filter((course) => getCourseTiming(course).days.includes(day))
-                  .map((course) => (
-                    <div
-                      key={`${course.id}-${day}`}
-                      className="absolute inset-x-1 rounded-lg p-2 cursor-pointer transition-all duration-200 ease-in-out hover:shadow-md group"
-                      style={getCourseStyle(course)}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="text-xs font-medium text-[#e7e7e7]">{course.id}</div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-4 w-4 p-0 text-[#e7e7e7] opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-black/20"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            removeFromSchedule(course)
-                          }}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                      <div className="text-xs text-[#e7e7e7] mt-1">{course.meetingInformation.time}</div>
-                    </div>
+            {/* Day columns */}
+            {days.map((day, dayIndex) => (
+              <div key={dayIndex} className="col-span-1 min-w-[150px]">
+                <div className="h-12 border-b flex items-end justify-center font-medium">{day}</div>
+                <div className="relative">
+                  {timeSlots.map((_, timeIndex) => (
+                    <div key={timeIndex} className="h-20 border-b"></div>
                   ))}
+
+                  {/* Course blocks */}
+                  {Object.entries(courseGroups).map(([courseId, scheduleItems]) =>
+                    scheduleItems
+                      .filter((item) => item.day === day)
+                      .map((item, index) => {
+                        const startHour = Number.parseInt(item.startTime.split(":")[0])
+                        const endHour = Number.parseInt(item.endTime.split(":")[0])
+                        const startMinutes = Number.parseInt(item.startTime.split(":")[1]) / 60
+                        const endMinutes = Number.parseInt(item.endTime.split(":")[1]) / 60
+                        const duration = endHour + endMinutes - (startHour + startMinutes)
+                        const top = (startHour - 8 + startMinutes) * 80 // 80px per hour
+                        const height = duration * 80
+
+                        // Different colors for different courses
+                        const colors = [
+                          "bg-blue-100 border-blue-300 text-blue-800",
+                          "bg-green-100 border-green-300 text-green-800",
+                          "bg-purple-100 border-purple-300 text-purple-800",
+                          "bg-amber-100 border-amber-300 text-amber-800",
+                        ]
+                        const colorIndex = selectedCourses.indexOf(courseId) % colors.length
+
+                        return (
+                          <div
+                            key={`${courseId}-${day}-${index}`}
+                            className={`absolute left-1 right-1 rounded-md border p-2 overflow-hidden ${colors[colorIndex]}`}
+                            style={{
+                              top: `${top}px`,
+                              height: `${height}px`,
+                            }}
+                          >
+                            <div className="text-xs font-bold">{item.id}</div>
+                            <div className="text-xs truncate">{item.title}</div>
+                            <div className="text-xs mt-1 truncate">{item.location}</div>
+                          </div>
+                        )
+                      }),
+                  )}
+                </div>
               </div>
             ))}
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
