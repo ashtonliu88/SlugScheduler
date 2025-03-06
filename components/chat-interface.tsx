@@ -133,7 +133,7 @@ export default function ChatInterface() {
       const formData = new FormData()
       formData.append('file', file)
       
-      fetch('https://slugschedulerrenderhost.onrender.com/upload', {
+      fetch('http://127.0.0.1:5000/upload', {
         method: 'POST',
         body: formData
       })
@@ -257,7 +257,7 @@ export default function ChatInterface() {
     try {
       // Determine if this is a recommendation request or preference question
       // to handle it properly on the backend
-      const endpoint = 'https://slugschedulerrenderhost.onrender.com/chat'
+      const endpoint = 'http://127.0.0.1:5000/chat'
       
       const response = await fetch(endpoint, {
         method: 'POST',
