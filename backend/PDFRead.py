@@ -268,14 +268,24 @@ def upload_pdf():
         schedule = generate_schedule(courses=common_courses, student_history=student_history, required_courses=remaining_required_courses, upper_electives_taken=upper_div_electives_taken, upper_electives_needed=remaining_upper_div_courses, prerequisites=prerequisites)
         # Extract courses from the schedule
         course_codes = re.findall(r'[A-Z]{2,4} \d{2,3}[A-Z]*', schedule)
-        print(course_codes)
         
         # Fetch course information from MongoDB
         course_info_list = []
         for course_code in course_codes:
             course_info = collection2.find_one({"Class Code": course_code}, {"_id": 0})
             if course_info:
-                course_info_list.append(course_info)
+                formatted_course = {
+                    "Class Code": course_info.get("Class Code", ""),
+                    "Class Name": course_info.get("Class Name", ""),
+                    "Class Type": course_info.get("Class Type", "Undergraduate"),
+                    "Credits": course_info.get("Credits", ""),
+                    "Days & Times": course_info.get("Days & Times", ""),
+                    "Room": course_info.get("Room", ""),
+                    "Instructors": course_info.get("Instructors", ""),
+                    "Description": course_info.get("Description", "No description available."),
+                    "Prereqs": course_info.get("Prereqs", "")
+                }
+                course_info_list.append(formatted_course)
 
         return jsonify({
             "success": True,
@@ -286,7 +296,7 @@ def upload_pdf():
                 "upper_div_electives_taken": upper_div_electives_taken,
                 "remaining_upper_div_courses": remaining_upper_div_courses,
                 "remaining_required_courses": remaining_required_courses,
-                "recommended_courses": course_info_list  # Add this line to include course information
+                "recommended_courses": course_info_list
             }
         }), 200
     except Exception as e:

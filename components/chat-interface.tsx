@@ -1,3 +1,4 @@
+//chat-interface.tsx
 "use client"
 
 import type React from "react"
@@ -12,10 +13,19 @@ import { Send, Upload, Bot, User, FileCheck, GraduationCap } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 
+interface RecommendedCourse {
+  'Class Code': string
+  'Class Name': string
+  'Days & Times': string
+  [key: string]: string | undefined
+
+}
+
 // Use sessionStorage instead of localStorage to maintain state only for current session
 const STORAGE_KEYS = {
   MESSAGES: 'course-assistant-messages',
-  TRANSCRIPT_UPLOADED: 'course-assistant-transcript-uploaded'
+  TRANSCRIPT_UPLOADED: 'course-assistant-transcript-uploaded',
+  RECOMMENDED_COURSES: 'course-assistant-recommended-courses'
 }
 
 export default function ChatInterface() {
@@ -134,6 +144,29 @@ export default function ChatInterface() {
               type: 'transcript-analysis' 
             }
           ])
+
+          // Add course recommendations to cha
+          if (parsedData.recommended_courses) {
+            const recommendedCourses = parsedData.recommended_courses
+            const recommendedCoursesOutput = parsedData.recommended_courses.map((course: RecommendedCourse) => {
+              return `${course['Class Code']} - ${course['Class Name']} - ${course['Days & Times']}`
+            })
+
+            sessionStorage.setItem(
+              STORAGE_KEYS.RECOMMENDED_COURSES, 
+              JSON.stringify([...JSON.parse(sessionStorage.getItem(STORAGE_KEYS.RECOMMENDED_COURSES) || '[]'), ...recommendedCourses])
+            )
+
+            setMessages(prevMessages => [
+              ...prevMessages, 
+              { 
+                role: 'assistant', 
+                content: `🎓 Recommended Courses: ${recommendedCoursesOutput.join(', ')}`,
+                type: 'transcript-analysis' 
+              }
+            ])
+          }
+
         }
       })
       .catch(error => {
