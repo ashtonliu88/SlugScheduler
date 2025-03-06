@@ -1,3 +1,4 @@
+#pdfread.py
 from flask import Flask, request, jsonify
 import PyPDF2
 import os
@@ -12,14 +13,13 @@ import json
 app = Flask(__name__)
 CORS(app)  # Allow frontend requests
 
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+
 openai.api_key = os.getenv("OPENAI_API_KEY")
 openai_client = openai
 UPLOAD_FOLDER = "/tmp"
 ALLOWED_EXTENSIONS = {"pdf"}
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-
-# Load environment variables from .env file
-load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 # Obtain MongoDB connection string from environment variables
 mongo_connection_string = os.getenv("MONGO_URI")
@@ -30,7 +30,7 @@ client = MongoClient(mongo_connection_string)
 course_codes = [
     'ACEN', 'AM', 'ANTH', 'APLX', 'ARBC', 'ART', 'ARTG', 'ASTR', 'BIOC', 'BIOE',
     'BIOL', 'BME', 'CHEM', 'CHIN', 'CLNI', 'CLST', 'CMMU', 'CMPM', 'COWL', 'CRES',
-    'CRSN', 'CT', 'CRWN', 'CSE', 'CSP', 'DANM', 'EART', 'ECE', 'ECON', 'EDUC',
+    'CRSN', 'CT', 'CRWN', 'CSE', 'ECE', 'ECON', 'EDUC',
     'ENVS', 'ESCI', 'FIL', 'FILM', 'FMST', 'FREN', 'GAME', 'GCH', 'GERM', 'GIST',
     'GRAD', 'GREE', 'HAVC', 'HEBR', 'HISC', 'HIS', 'HCI', 'HUMN', 'ITAL', 'JAPN',
     'JRLC', 'JWST', 'KRSG', 'LAAD', 'LALS', 'LATN', 'LGST', 'LING', 'LIT', 'MATH',
@@ -106,10 +106,7 @@ def extract_major(cleaned_lines):
     matching_lines = [line for line in cleaned_lines if 'Plan:' in line]
     return matching_lines[-2].split('Plan:')[-1].strip() if len(matching_lines) >= 2 else "Unknown"
 
-
 def generate_schedule(courses, student_history, required_courses, upper_electives_taken, upper_electives_needed, prerequisites, model="chatgpt-4o-latest"):
-    
-
     prompt = f"""
     Here is a list of available courses for next quarter:
     
@@ -189,6 +186,237 @@ def extract_major_and_type(degree):
 
     return {"major": major, "type": degree_type}
 
+def query_courses_by_criteria(criteria):
+    """Query courses from MongoDB based on given criteria."""
+    db = client["course"]
+    collection = db['classInfo']
+    
+    query = {}
+    
+    # Subject area filter
+    if criteria.get('subject'):
+        subject_regex = f"^{criteria['subject']}"
+        query['Class Code'] = {'$regex': subject_regex}
+    
+    # Excluded subject areas
+    if criteria.get('excluded_subjects') and len(criteria['excluded_subjects']) > 0:
+        excluded_patterns = [f"^{subj}" for subj in criteria['excluded_subjects']]
+        if 'Class Code' not in query:
+            query['Class Code'] = {}
+        
+        if '$regex' in query['Class Code']:
+            existing_regex = query['Class Code']['$regex']
+            query['Class Code'] = {
+                '$regex': existing_regex,
+                '$not': {'$in': excluded_patterns}
+            }
+        else:
+            query['Class Code'] = {'$not': {'$in': excluded_patterns}}
+    
+    # Time of day filter
+    if criteria.get('time_of_day'):
+        time_pattern = {
+            'morning': {'$regex': r'AM'},
+            'afternoon': {'$regex': r'12:00PM|1:00PM|2:00PM|3:00PM|4:00PM'},
+            'evening': {'$regex': r'5:00PM|6:00PM|7:00PM|8:00PM|9:00PM'}
+        }.get(criteria['time_of_day'])
+        
+        if time_pattern:
+            query['Days & Times'] = time_pattern
+    
+    # Days of week filter
+    if criteria.get('days'):
+        days_pattern = criteria['days']
+        if days_pattern == 'MWF':
+            query['Days & Times'] = {'$regex': r'M.*W.*F'}
+        elif days_pattern == 'TR':
+            query['Days & Times'] = {'$regex': r'T.*R'}
+    
+    # GE requirement filter
+    if criteria.get('ge'):
+        query['GE'] = {'$regex': criteria['ge']}
+    
+    # Difficulty level filter (this would need additional data or analysis)
+    if criteria.get('level'):
+        level_map = {
+            'introductory': {'$regex': r' [1-9][0-9]$'},
+            'intermediate': {'$regex': r' 1[0-9][0-9]$'},
+            'advanced': {'$regex': r' 2[0-9][0-9]$'}
+        }.get(criteria['level'])
+        
+        if level_map:
+            if 'Class Code' in query:
+                # Handle complex queries where we already have Class Code filters
+                # This would require a more sophisticated approach with $and operators
+                pass
+            else:
+                query['Class Code'] = level_map
+    
+    if criteria.get('open_only') and criteria['open_only']:
+        query['Status'] = 'Open'
+    
+    
+    print(f"MongoDB Query: {query}")
+    
+    if 'Class Code' in query and isinstance(query['Class Code'], dict) and len(query['Class Code']) > 1:
+        conditions = []
+        for key, value in query['Class Code'].items():
+            conditions.append({f'Class Code.{key}': value})
+        query = {'$and': conditions}
+    
+    courses = list(collection.find(query, {'_id': 0}).limit(10))
+    
+    if not courses and criteria.get('excluded_subjects'):
+        backup_query = {k: v for k, v in query.items() if k != 'Class Code'}
+        backup_courses = list(collection.find(backup_query, {'_id': 0}).limit(10))
+        
+        # Filter out excluded subjects manually
+        if backup_courses:
+            excluded_subjects = criteria.get('excluded_subjects', [])
+            filtered_courses = [
+                course for course in backup_courses 
+                if not any(course.get('Class Code', '').startswith(subj) for subj in excluded_subjects)
+            ]
+            
+            if filtered_courses:
+                return filtered_courses
+    
+
+    if not courses and criteria.get('from_potential_upper_div_list') and 'remaining_upper_div_courses' in student_info:
+        potential_courses = student_info['remaining_upper_div_courses']
+        
+        # Filter out excluded subjects if necessary
+        if criteria.get('excluded_subjects'):
+            excluded_subjects = criteria.get('excluded_subjects', [])
+            potential_courses = [
+                course for course in potential_courses 
+                if not any(course.startswith(subj) for subj in excluded_subjects)
+            ]
+        
+        if potential_courses:
+            upper_div_courses = list(collection.find(
+                {"Class Code": {"$in": potential_courses}}, 
+                {'_id': 0}
+            ).limit(10))
+            
+            return upper_div_courses
+    
+    return courses
+
+
+def extract_recommendation_criteria(message):
+    """Extract course recommendation criteria from user message using OpenAI."""
+    extraction_prompt = f"""
+    Extract course recommendation criteria from this message:
+    "{message}"
+    
+    Return a JSON object with these fields (use null if not mentioned):
+    - subject: the department code or subject area (like CSE, MATH, etc.)
+    - excluded_subjects: array of department codes that should be excluded (if user wants to avoid certain departments)
+    - time_of_day: one of [morning, afternoon, evening, null]
+    - days: one of [MWF, TR, null] (MWF = Monday/Wednesday/Friday, TR = Tuesday/Thursday)
+    - level: one of [introductory, intermediate, advanced, null]
+    - ge: any mentioned general education requirement code
+    - open_only: boolean, true if user only wants courses with open seats
+    - difficulty: one of [easy, moderate, challenging, null]
+    - interest_keywords: array of keywords related to topics they're interested in
+    
+    Only include the JSON in your response, no other text.
+    
+    Examples:
+    - For "Give me other classes than AM classes", include ["AM"] in excluded_subjects
+    - For "I don't want any MATH or PHYS courses", include ["MATH", "PHYS"] in excluded_subjects
+    """
+    
+    response = openai_client.chat.completions.create(
+        model="chatgpt-4o-latest",
+        messages=[
+            {"role": "system", "content": "You are a criteria extraction system."},
+            {"role": "user", "content": extraction_prompt},
+        ],
+    )
+    
+    # Parse the JSON response
+    try:
+        extracted_criteria = json.loads(response.choices[0].message.content)
+        return extracted_criteria
+    except Exception as e:
+        print(f"Error parsing criteria JSON: {e}")
+        return {}
+
+
+def format_course_recommendations(courses, criteria, student_history=None):
+    """Format course recommendations with OpenAI assistance."""
+    if not courses:
+        if not criteria.get('from_potential_upper_div_list'):
+            criteria['from_potential_upper_div_list'] = True
+            upper_div_courses = query_courses_by_criteria(criteria)
+            
+            if upper_div_courses:
+                return format_course_recommendations(upper_div_courses, criteria, student_history)
+        
+        return "I couldn't find any courses matching your criteria. Could you try with different requirements?"
+    
+    courses_text = "\n".join([
+        f"- {course['Class Code']}: {course['Class Name']} ({course.get('Credits', 'N/A')} credits)\n"
+        f"  Times: {course.get('Days & Times', 'Not specified')}\n"
+        f"  Description: {course.get('Description', 'No description available.')[:200]}...\n"
+        f"  Prerequisites: {course.get('Prereqs', 'None')}\n"
+        for course in courses
+    ])
+    
+    history_text = ""
+    if student_history:
+        history_text = f"The student has previously taken: {', '.join(student_history)}"
+    
+    exclusion_text = ""
+    if criteria.get('excluded_subjects'):
+        exclusion_text = f"The student specifically asked to AVOID courses from these departments: {', '.join(criteria['excluded_subjects'])}"
+    
+    prompt = f"""
+    A student is looking for course recommendations with these preferences:
+    {json.dumps(criteria, indent=2)}
+    
+    {history_text}
+    
+    {exclusion_text}
+    
+    These courses match their criteria:
+    {courses_text}
+    
+    Provide a personalized response recommending 3-5 of these courses, explaining:
+    1. Why each course fits their preferences
+    2. Any special considerations about timing, prerequisites, or workload
+    3. How these courses might work together in a schedule
+    
+    Format each recommendation clearly with the course code, name, and brief explanation.
+    
+    IMPORTANT: Strictly avoid recommending any courses from departments the student asked to exclude.
+    """
+    
+    response = openai_client.chat.completions.create(
+        model="chatgpt-4o-latest",
+        messages=[
+            {"role": "system", "content": "You are a helpful academic advisor for UC Santa Cruz."},
+            {"role": "user", "content": prompt},
+        ],
+    )
+    
+    return response.choices[0].message.content
+
+def is_recommendation_request(message):
+    """Determine if a message is asking for course recommendations."""
+    recommendation_keywords = [
+        "recommend", "suggest", "courses", "classes", "next quarter", 
+        "should take", "good classes", "what classes", "which courses",
+        "looking for classes", "need a class", "find me", "course recommendation",
+        "give me classes", "give me other classes", "show me courses", 
+        "courses besides", "classes other than"
+    ]
+    
+    message_lower = message.lower()
+    return any(keyword in message_lower for keyword in recommendation_keywords)
+
 @app.route('/upload', methods=['POST'])
 def upload_pdf():
     """Handle file upload and processing."""
@@ -211,11 +439,14 @@ def upload_pdf():
         courses_by_quarter = parse_courses(cleaned_lines)
         major = extract_major(cleaned_lines)
 
-        # Student history in the form of course codes in list format
         student_history = []
         for quarter, courses in courses_by_quarter.items():
             for course in courses:
                 student_history.append(course['course_code'])
+        
+
+        global current_student_history
+        current_student_history = student_history
         
         # Year of admission
         year_of_admission = list(courses_by_quarter.keys())[0].split(" ")[0]
@@ -257,16 +488,13 @@ def upload_pdf():
         else:
             return jsonify({"success": False, "error": f"No curriculum found for {major} and year {year_of_admission}"}), 404
         
-        # Get common courses that are available this quarter
         common_courses = [course for course in remaining_upper_div_courses if course in class_code_list]
         
-        # Get the prerequisites for the common courses
         prerequisites_cursor = collection2.find({"Class Code": {"$in": common_courses}}, {"Class Code": 1, "Prereqs": 1, "_id": 0})
         prerequisites = {doc["Class Code"]: doc.get("Prereqs", "None") for doc in prerequisites_cursor}
 
         # Generate the schedule
         schedule = generate_schedule(courses=common_courses, student_history=student_history, required_courses=remaining_required_courses, upper_electives_taken=upper_div_electives_taken, upper_electives_needed=remaining_upper_div_courses, prerequisites=prerequisites)
-        # Extract courses from the schedule
         course_codes = re.findall(r'[A-Z]{2,4} \d{2,3}[A-Z]*', schedule)
         
         # Fetch course information from MongoDB
@@ -287,6 +515,14 @@ def upload_pdf():
                 }
                 course_info_list.append(formatted_course)
 
+        global student_info
+        student_info = {
+            "major": major_name,
+            "type": major_type,
+            "student_history": student_history,
+            "remaining_required_courses": remaining_required_courses
+        }
+
         return jsonify({
             "success": True,
             "data": {
@@ -306,67 +542,335 @@ def upload_pdf():
         if os.path.exists(file_path):
             os.remove(file_path)
 
+student_info = {
+    "major": None,
+    "type": None,
+    "student_history": [],
+    "remaining_required_courses": []
+}
+
+def is_schedule_request(message):
+    """Determine if a message is asking for schedule recommendations."""
+    schedule_keywords = [
+        "schedule", "timetable", "class schedule", "next quarter", 
+        "plan my classes", "plan my courses", "schedule builder",
+        "what should my schedule be", "recommend a schedule",
+        "help me plan", "organize my classes", "build me a schedule",
+        "create a schedule", "balance my schedule", "optimal schedule",
+        "best schedule", "good schedule", "manageable schedule"
+    ]
+    
+    message_lower = message.lower()
+    return any(keyword in message_lower for keyword in schedule_keywords)
+
+def extract_schedule_preferences(message):
+    """Extract schedule preferences from user message using OpenAI."""
+    extraction_prompt = f"""
+    Extract schedule preferences from this message:
+    "{message}"
+    
+    Return a JSON object with these fields (use null if not mentioned):
+    - maxClassesPerDay: integer (1-5)
+    - preferredDaysOff: array of days (M, T, W, R, F)
+    - earliestStartTime: time (e.g., "8:00 AM")
+    - latestEndTime: time (e.g., "5:00 PM") 
+    - workloadPreference: one of [light, balanced, challenging]
+    - breakBetweenClasses: boolean or minutes (true, false, or number of minutes)
+    - preferredSubjects: array of department codes the student wants to focus on
+    - avoidSubjects: array of department codes to avoid
+    - includeRequiredCourses: boolean (true if they want to prioritize required courses)
+    - includeUpperDivision: boolean (true if they specifically want upper division courses)
+    - preferGEs: boolean (true if they want to include General Education requirements)
+    - totalUnits: preferred number of units for the quarter (typically 12-19)
+    
+    Only include the JSON in your response, no other text.
+    """
+    
+    response = openai_client.chat.completions.create(
+        model="chatgpt-4o-latest",
+        messages=[
+            {"role": "system", "content": "You are a preference extraction system."},
+            {"role": "user", "content": extraction_prompt},
+        ],
+    )
+    
+    try:
+        extracted_preferences = json.loads(response.choices[0].message.content)
+        return extracted_preferences
+    except Exception as e:
+        print(f"Error parsing schedule preferences JSON: {e}")
+        return {}
+def extract_and_store_preferences(message):
+    """Extract and store student preferences from message."""
+    extraction_prompt = f"""
+    Extract the student's course preferences from this message:
+    "{message}"
+    
+    Return a JSON object with these fields (leave empty if not mentioned):
+    - preferredTimeOfDay: one of [morning, afternoon, evening, any]
+    - workloadPreference: one of [light, balanced, challenging]
+    - interestAreas: array of subject areas they're interested in
+    - preferredDays: array of preferred days (MWF, TR, etc.)
+    - preferredUnitsPerQuarter: number (typically 12-19)
+    - preferGaps: boolean (whether they like breaks between classes)
+    - preferConsecutiveClasses: boolean (whether they like classes back-to-back)
+    
+    Only include the JSON in your response, no other text.
+    """
+    
+    response = openai_client.chat.completions.create(
+        model="chatgpt-4o-latest",
+        messages=[
+            {"role": "system", "content": "You are a preference extraction system."},
+            {"role": "user", "content": extraction_prompt},
+        ],
+    )
+    
+    try:
+        extracted_preferences = json.loads(response.choices[0].message.content)
+        
+        global student_preferences
+        student_preferences = extracted_preferences
+        
+        return extracted_preferences
+    except Exception as e:
+        print(f"Error parsing preferences: {e}")
+        return {}
+
+def generate_personalized_schedule(preferences, student_history, required_courses, major):
+    """Generate a personalized schedule based on student preferences."""
+    db = client["course"]
+    collection = db['classInfo']
+    
+    query = {}
+    
+    # Add filters based on preferences
+    if preferences.get('preferredSubjects'):
+        subject_patterns = [f"^{subj}" for subj in preferences['preferredSubjects']]
+        query['Class Code'] = {'$regex': {'$in': subject_patterns}}
+    
+    if preferences.get('avoidSubjects'):
+        avoid_patterns = [f"^{subj}" for subj in preferences['avoidSubjects']]
+        if 'Class Code' in query:
+            query['$and'] = [
+                {'Class Code': query['Class Code']},
+                {'Class Code': {'$not': {'$in': avoid_patterns}}}
+            ]
+            del query['Class Code']
+        else:
+            query['Class Code'] = {'$not': {'$in': avoid_patterns}}
+    
+    time_query = {}
+    if preferences.get('earliestStartTime'):
+        # This would need more sophisticated time comparison logic
+        pass
+    
+    if preferences.get('latestEndTime'):
+        # This would need more sophisticated time comparison logic
+        pass
+    
+    if preferences.get('preferredDaysOff'):
+        days_to_avoid = preferences['preferredDaysOff']
+        day_patterns = []
+        for day in days_to_avoid:
+            day_patterns.append({'Days & Times': {'$not': {'$regex': day}}})
+        
+        if day_patterns:
+            if '$and' not in query:
+                query['$and'] = []
+            query['$and'].extend(day_patterns)
+    
+    # Get available courses
+    available_courses = list(collection.find(query, {'_id': 0}))
+    
+    # Filter out courses student has already taken
+    available_courses = [course for course in available_courses 
+                         if course.get('Class Code') not in student_history]
+    
+    # Extract required courses the student still needs to take
+    flattened_required = []
+    for course_group in required_courses:
+        if isinstance(course_group, list):
+            flattened_required.extend(course_group)
+        else:
+            flattened_required.append(course_group)
+    
+    # Filter for required courses if requested
+    required_available = []
+    if preferences.get('includeRequiredCourses', True):
+        required_available = [course for course in available_courses 
+                              if course.get('Class Code') in flattened_required]
+    
+    # Generate schedule using OpenAI
+    course_list = "\n".join([
+        f"- {course.get('Class Code', 'Unknown')}: {course.get('Class Name', 'Unknown')} "
+        f"({course.get('Credits', 'Unknown')} units) - {course.get('Days & Times', 'Unknown')}"
+        for course in available_courses[:30]  # Limit to 30 to not overload the prompt
+    ])
+    
+    required_list = "\n".join([
+        f"- {course.get('Class Code', 'Unknown')}: {course.get('Class Name', 'Unknown')} "
+        f"({course.get('Credits', 'Unknown')} units) - {course.get('Days & Times', 'Unknown')}"
+        for course in required_available
+    ]) if required_available else "No required courses available this quarter."
+    
+    target_units = preferences.get('totalUnits', 15)
+    
+    # Prepare prompt for schedule generation
+    schedule_prompt = f"""
+    Generate a personalized course schedule for a {major} major student with these preferences:
+    {json.dumps(preferences, indent=2)}
+    
+    The student has already taken these courses: {', '.join(student_history)}
+    
+    Required courses available this quarter:
+    {required_list}
+    
+    Other available courses (sample):
+    {course_list}
+    
+    Create a balanced schedule with approximately {target_units} units that:
+    1. Prioritizes required courses for their major if requested
+    2. Respects their preferred days/times
+    3. Balances workload across the week
+    4. Avoids time conflicts
+    5. Includes appropriate breaks between classes if requested
+    6. Ensures prerequisites are met based on their history
+    
+    Format the schedule by day of week, showing course code, name, time, location, and units.
+    Also provide a brief explanation of why this schedule would work well for them.
+    """
+    
+    response = openai_client.chat.completions.create(
+        model="chatgpt-4o-latest",
+        messages=[
+            {"role": "system", "content": "You are an expert academic scheduler."},
+            {"role": "user", "content": schedule_prompt},
+        ],
+    )
+    
+    return response.choices[0].message.content
+
+
+@app.route('/refine_schedule', methods=['POST'])
+def refine_schedule():
+    """Endpoint for refining a suggested schedule based on student feedback."""
+    data = request.json
+    current_schedule = data.get('current_schedule', '')
+    feedback = data.get('feedback', '')
+    
+    refine_prompt = f"""
+    The student currently has this schedule:
+    {current_schedule}
+    
+    They've provided this feedback or requested these changes:
+    "{feedback}"
+    
+    Adjust the schedule to better meet their needs. Consider:
+    1. Adding or removing specific courses
+    2. Adjusting time slots
+    3. Balancing the workload
+    4. Addressing any specific concerns they raised
+    
+    Provide the revised schedule and explain the changes made.
+    """
+    
+    response = openai_client.chat.completions.create(
+        model="chatgpt-4o-latest",
+        messages=[
+            {"role": "system", "content": "You are an expert academic scheduler."},
+            {"role": "user", "content": refine_prompt},
+        ],
+    )
+    
+    return jsonify({
+        "response": response.choices[0].message.content
+    })
+
+@app.route('/compare_schedules', methods=['POST'])
+def compare_schedules():
+    """Endpoint for comparing multiple possible schedules."""
+    data = request.json
+    schedules = data.get('schedules', [])
+    
+    if not schedules or len(schedules) < 2:
+        return jsonify({"success": False, "error": "Need at least two schedules to compare"}), 400
+    
+    comparison_prompt = f"""
+    Compare these possible course schedules:
+    
+    {json.dumps(schedules, indent=2)}
+    
+    For each schedule, analyze:
+    1. Total units and workload balance
+    2. Daily time commitment
+    3. Subject variety
+    4. Progress toward degree requirements
+    5. Potential challenges or conflicts
+    
+    Recommend which schedule would be best overall and explain why.
+    Also identify pros and cons of each option.
+    """
+    
+    response = openai_client.chat.completions.create(
+        model="chatgpt-4o-latest",
+        messages=[
+            {"role": "system", "content": "You are an expert academic scheduler."},
+            {"role": "user", "content": comparison_prompt},
+        ],
+    )
+    
+    return jsonify({
+        "success": True,
+        "comparison": response.choices[0].message.content
+    })
+
 @app.route('/chat', methods=['POST'])
 def chat():
-    """Handle chat messages and extract preferences."""
+    """Handle chat messages and provide schedule recommendations."""
     data = request.json
     message = data.get('message', '')
     
-    # Check if this is a preference-related question
-    preference_keywords = [
-        "prefer", "like", "enjoy", "interested in", "morning", "afternoon",
-        "evening", "difficult", "easy", "challenging", "workload"
-    ]
-    
-    is_preference_related = any(keyword in message.lower() for keyword in preference_keywords)
-    
-    if is_preference_related:
-        # Use OpenAI to extract preferences from the message
-        extraction_prompt = f"""
-        Extract the student's course preferences from this message:
-        "{message}"
+    # Check if this is a schedule recommendation request
+    if is_schedule_request(message):
+        preferences = extract_schedule_preferences(message)
         
-        Return a JSON object with these fields (leave empty if not mentioned):
-        - preferredTimeOfDay: one of [morning, afternoon, evening, any]
-        - workloadPreference: one of [light, balanced, challenging]
-        - interestAreas: array of subject areas they're interested in
-        - preferredDays: array of preferred days (MWF, TR, etc.)
-        
-        Only include the JSON in your response, no other text.
-        """
-        
-        response = openai_client.chat.completions.create(
-            model="chatgpt-4o-latest",
-            messages=[
-                {"role": "system", "content": "You are a preference extraction system."},
-                {"role": "user", "content": extraction_prompt},
-            ],
+        schedule_response = generate_personalized_schedule(
+            preferences, 
+            student_info.get("student_history", []),
+            student_info.get("remaining_required_courses", []),
+            student_info.get("major", "Unknown")
         )
         
-        # Parse the JSON response
-        try:
-            extracted_preferences = json.loads(response.choices[0].message.content)
-            
-            # In a real application, you would store these preferences
-            # For now, just respond with the extracted preferences
-            return jsonify({
-                "response": f"I've noted your preferences:\n" +
-                           f"- Time of day: {extracted_preferences.get('preferredTimeOfDay', 'Not specified')}\n" +
-                           f"- Days: {', '.join(extracted_preferences.get('preferredDays', ['Not specified']))}\n" +
-                           f"- Workload: {extracted_preferences.get('workloadPreference', 'Not specified')}\n" +
-                           f"- Interests: {', '.join(extracted_preferences.get('interestAreas', []))}\n\n" +
-                           f"I'll adjust my course recommendations accordingly."
-            })
-        except:
-            # If JSON parsing fails, just process as a regular message
-            pass
+        return jsonify({
+            "response": schedule_response
+        })
     
-    # General chat handling
+    
+    elif any(keyword in message.lower() for keyword in ["prefer", "like", "enjoy", "interested in"]):
+        
+        extracted_preferences = extract_and_store_preferences(message)
+        
+        return jsonify({
+            "response": f"I've noted your preferences:\n" +
+                        f"- Time of day: {extracted_preferences.get('preferredTimeOfDay', 'Not specified')}\n" +
+                        f"- Days: {', '.join(extracted_preferences.get('preferredDays', ['Not specified']))}\n" +
+                        f"- Workload: {extracted_preferences.get('workloadPreference', 'Not specified')}\n" +
+                        f"- Interests: {', '.join(extracted_preferences.get('interestAreas', []))}\n\n" +
+                        f"I'll adjust my schedule recommendations accordingly."
+        })
+    
+    
     chat_prompt = f"""
     The student is asking: "{message}"
     
-    You are a helpful course assistant for UC Santa Cruz students.
-    Provide a helpful, concise response about courses, requirements, or general academic advice.
+    Student information:
+    - Major: {student_info.get('major', 'Unknown')}
+    - Type: {student_info.get('type', 'Unknown')}
+    - Courses taken: {', '.join(student_info.get('student_history', ['Unknown']))}
+    
+    You are a helpful schedule assistant for UC Santa Cruz students.
+    Provide a helpful, concise response about course scheduling, requirements, or general academic advice.
     """
     
     response = openai_client.chat.completions.create(
@@ -381,6 +885,30 @@ def chat():
         "response": response.choices[0].message.content
     })
 
+@app.route('/specific_recommendations', methods=['POST'])
+def specific_recommendations():
+    """Endpoint for getting recommendations with specific criteria."""
+    data = request.json
+    criteria = data.get('criteria', {})
+    
+    if not criteria:
+        return jsonify({"success": False, "error": "No criteria provided"}), 400
+    
+    
+    courses = query_courses_by_criteria(criteria)
+    
+    
+    recommendation_response = format_course_recommendations(
+        courses, 
+        criteria, 
+        student_info.get("student_history")
+    )
+    
+    return jsonify({
+        "success": True,
+        "recommendations": recommendation_response,
+        "courses": courses
+    })
 
 if __name__ == "__main__":
     app.run(debug=True)
