@@ -7,7 +7,7 @@ export default function Home() {
     <div className="min-h-screen bg-slate-50">
       <header className="bg-[#003c6c] text-white p-4 shadow-md">
         <div className="container mx-auto flex items-center gap-2">
-          <h1 className="text-xl font-bold">UCSC Course Recommendation System</h1>
+          <h1 className="text-xl font-bold">UCSC SlugScheduler</h1>
         </div>
       </header>
 
@@ -30,7 +30,7 @@ export default function Home() {
 
       <footer className="bg-[#003c6c] text-white p-4 mt-8">
         <div className="container mx-auto text-center">
-          <p>© {new Date().getFullYear()} UCSC Course Recommendation System</p>
+          <p>© {new Date().getFullYear()} UCSC SlugScheduler</p>
         </div>
       </footer>
     </div>
