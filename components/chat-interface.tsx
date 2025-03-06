@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -12,12 +12,63 @@ import { Send, Upload, Bot, User, FileCheck, GraduationCap } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 
+// Use sessionStorage instead of localStorage to maintain state only for current session
+const STORAGE_KEYS = {
+  MESSAGES: 'course-assistant-messages',
+  TRANSCRIPT_UPLOADED: 'course-assistant-transcript-uploaded'
+}
+
 export default function ChatInterface() {
-  const [transcriptUploaded, setTranscriptUploaded] = useState(false)
-  const [messages, setMessages] = useState<{ role: string, content: string, type?: string }[]>([])
+  // Initialize state from sessionStorage if available
+  const [transcriptUploaded, setTranscriptUploaded] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem(STORAGE_KEYS.TRANSCRIPT_UPLOADED)
+      return saved ? JSON.parse(saved) : false
+    }
+    return false
+  })
+  
+  const [messages, setMessages] = useState<{ role: string, content: string, type?: string }[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem(STORAGE_KEYS.MESSAGES)
+      return saved ? JSON.parse(saved) : []
+    }
+    return []
+  })
+  
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+  
+  // Create a ref for the chat container
+  const chatContainerRef = useRef<HTMLDivElement>(null)
+
+  // Save to sessionStorage whenever relevant state changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(messages))
+    }
+  }, [messages])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(STORAGE_KEYS.TRANSCRIPT_UPLOADED, JSON.stringify(transcriptUploaded))
+    }
+  }, [transcriptUploaded])
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+    }
+  }, [messages])
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSubmit(e as unknown as React.FormEvent)
+    }
+  }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -71,8 +122,8 @@ export default function ChatInterface() {
             🎓 Transcript Analysis:
             • Major: ${parsedData.major} (${parsedData.type})
             • Upper Division Electives Taken: ${parsedData.upper_div_electives_taken}
-            • Remaining Required Courses: ${parsedData.remaining_required_courses.flat().length}
-            • Remaining Upper Division Courses: ${parsedData.remaining_upper_div_courses.length}
+            • Remaining Required Courses: ${parsedData.remaining_required_courses.flat().join(', ')}
+            • Possibl Upper Division Courses to Take: ${parsedData.remaining_upper_div_courses.length}
           `
 
           setMessages(prevMessages => [
@@ -180,7 +231,11 @@ export default function ChatInterface() {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto mb-4 p-4 border rounded-lg">
+      {/* Apply the ref to your chat container */}
+      <div 
+        ref={chatContainerRef} 
+        className="flex-1 overflow-y-auto mb-4 p-4 border rounded-lg"
+      >
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center text-gray-500">
             <Bot size={48} className="mb-4 text-[#003c6c]" />
@@ -244,6 +299,7 @@ export default function ChatInterface() {
         <Textarea
           value={input}
           onChange={handleInputChange}
+          onKeyPress={handleKeyPress}
           placeholder="Ask about courses, requirements, or recommendations..."
           className="flex-1 resize-none"
           rows={2}

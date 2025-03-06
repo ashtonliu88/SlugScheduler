@@ -7,6 +7,7 @@ from pymongo import MongoClient
 import openai
 from dotenv import load_dotenv
 import re
+import json
 
 app = Flask(__name__)
 CORS(app)  # Allow frontend requests
@@ -224,8 +225,6 @@ def upload_pdf():
         major_info = extract_major_and_type(major)
         major_name = major_info["major"]
         major_type = major_info["type"]
-        print(major_name)
-        print(major_type)
 
         db = client["university"]  # Name of your MongoDB database
         collection = db['majors']
@@ -253,7 +252,6 @@ def upload_pdf():
                     for course in course_group:
                         if course in student_history:
                             upper_div_electives_taken += 1
-                            print(f"Course taken: {course}")
                         if course not in student_history:
                             remaining_upper_div_courses.append(course)
         else:
@@ -268,9 +266,9 @@ def upload_pdf():
 
         # Generate the schedule
         schedule = generate_schedule(courses=common_courses, student_history=student_history, required_courses=remaining_required_courses, upper_electives_taken=upper_div_electives_taken, upper_electives_needed=remaining_upper_div_courses, prerequisites=prerequisites)
-
         # Extract courses from the schedule
         course_codes = re.findall(r'[A-Z]{2,4} \d{2,3}[A-Z]*', schedule)
+        print(course_codes)
         
         # Fetch course information from MongoDB
         course_info_list = []
@@ -297,6 +295,82 @@ def upload_pdf():
     finally:
         if os.path.exists(file_path):
             os.remove(file_path)
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    """Handle chat messages and extract preferences."""
+    data = request.json
+    message = data.get('message', '')
+    
+    # Check if this is a preference-related question
+    preference_keywords = [
+        "prefer", "like", "enjoy", "interested in", "morning", "afternoon",
+        "evening", "difficult", "easy", "challenging", "workload"
+    ]
+    
+    is_preference_related = any(keyword in message.lower() for keyword in preference_keywords)
+    
+    if is_preference_related:
+        # Use OpenAI to extract preferences from the message
+        extraction_prompt = f"""
+        Extract the student's course preferences from this message:
+        "{message}"
+        
+        Return a JSON object with these fields (leave empty if not mentioned):
+        - preferredTimeOfDay: one of [morning, afternoon, evening, any]
+        - workloadPreference: one of [light, balanced, challenging]
+        - interestAreas: array of subject areas they're interested in
+        - preferredDays: array of preferred days (MWF, TR, etc.)
+        
+        Only include the JSON in your response, no other text.
+        """
+        
+        response = openai_client.chat.completions.create(
+            model="chatgpt-4o-latest",
+            messages=[
+                {"role": "system", "content": "You are a preference extraction system."},
+                {"role": "user", "content": extraction_prompt},
+            ],
+        )
+        
+        # Parse the JSON response
+        try:
+            extracted_preferences = json.loads(response.choices[0].message.content)
+            
+            # In a real application, you would store these preferences
+            # For now, just respond with the extracted preferences
+            return jsonify({
+                "response": f"I've noted your preferences:\n" +
+                           f"- Time of day: {extracted_preferences.get('preferredTimeOfDay', 'Not specified')}\n" +
+                           f"- Days: {', '.join(extracted_preferences.get('preferredDays', ['Not specified']))}\n" +
+                           f"- Workload: {extracted_preferences.get('workloadPreference', 'Not specified')}\n" +
+                           f"- Interests: {', '.join(extracted_preferences.get('interestAreas', []))}\n\n" +
+                           f"I'll adjust my course recommendations accordingly."
+            })
+        except:
+            # If JSON parsing fails, just process as a regular message
+            pass
+    
+    # General chat handling
+    chat_prompt = f"""
+    The student is asking: "{message}"
+    
+    You are a helpful course assistant for UC Santa Cruz students.
+    Provide a helpful, concise response about courses, requirements, or general academic advice.
+    """
+    
+    response = openai_client.chat.completions.create(
+        model="chatgpt-4o-latest",
+        messages=[
+            {"role": "system", "content": "You are a helpful academic advisor for UC Santa Cruz."},
+            {"role": "user", "content": chat_prompt},
+        ],
+    )
+    
+    return jsonify({
+        "response": response.choices[0].message.content
+    })
+
 
 if __name__ == "__main__":
     app.run(debug=True)
