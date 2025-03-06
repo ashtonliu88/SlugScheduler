@@ -16,6 +16,14 @@ interface CourseSchedule {
   location: string
 }
 
+// Define interface for the recommended course data from the backend
+interface RecommendedCourse {
+  'Class Code': string
+  'Course Name': string
+  'Location'?: string
+  // Add other properties as needed
+}
+
 export default function CalendarView() {
   const [currentTerm, setCurrentTerm] = useState("Winter 2025")
   const [selectedCourses, setSelectedCourses] = useState<string[]>([])
@@ -32,11 +40,11 @@ export default function CalendarView() {
       .then(data => {
         if (data.success && data.data.recommended_courses) {
           // Extract course information from the recommended courses
-          const recommendedCourseCodes = data.data.recommended_courses.map((course: any) => course['Class Code'])
+          const recommendedCourseCodes = data.data.recommended_courses.map((course: RecommendedCourse) => course['Class Code'])
           setSelectedCourses(recommendedCourseCodes)
 
           // Transform backend course data to match our schedule interface
-          const transformedSchedule = data.data.recommended_courses.flatMap((course: any) => {
+          const transformedSchedule = data.data.recommended_courses.flatMap((course: RecommendedCourse) => {
             // Note: You'll need to adjust this transformation based on your actual backend data
             return [
               {

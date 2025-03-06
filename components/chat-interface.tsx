@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Send, Upload, Bot, User, FileCheck, BookOpen, GraduationCap } from "lucide-react"
+import { Send, Upload, Bot, User, FileCheck, GraduationCap } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 
@@ -45,7 +45,7 @@ export default function ChatInterface() {
           ])
           return
         }
-        
+
         console.log('File uploaded successfully', data)
         
         // Update states
