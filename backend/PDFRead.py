@@ -26,6 +26,10 @@ mongo_connection_string = os.getenv("MONGO_URI")
 
 # Initialize MongoDB client
 client = MongoClient(mongo_connection_string)
+
+# Collection for storing recommended courses
+RECOMMENDED_COURSES = 'course-assistant-recommended-courses'
+
 # List of valid course codes
 course_codes = [
     'ACEN', 'AM', 'ANTH', 'APLX', 'ARBC', 'ART', 'ARTG', 'ASTR', 'BIOC', 'BIOE',
@@ -514,13 +518,35 @@ def upload_pdf():
                     "Prereqs": course_info.get("Prereqs", "")
                 }
                 course_info_list.append(formatted_course)
+        
+        # Save recommended courses to dedicated collection
+        recommended_db = client["course"]
+        recommended_collection = recommended_db[RECOMMENDED_COURSES]
+        
+        # Create a unique student identifier (using a hash of their history or some other identifier)
+        student_id = hash(str(student_history))
+        
+        # Store recommended courses with student identifier
+        recommended_collection.update_one(
+            {"student_id": student_id},
+            {"$set": {
+                "student_id": student_id,
+                "major": major_name,
+                "type": major_type,
+                "recommended_courses": course_info_list,
+                "last_updated": os.popen('date "+%Y-%m-%d %H:%M:%S"').read().strip()
+            }},
+            upsert=True
+        )
 
         global student_info
         student_info = {
             "major": major_name,
             "type": major_type,
             "student_history": student_history,
-            "remaining_required_courses": remaining_required_courses
+            "remaining_required_courses": remaining_required_courses,
+            "remaining_upper_div_courses": remaining_upper_div_courses,
+            "student_id": student_id
         }
 
         return jsonify({
@@ -546,7 +572,19 @@ student_info = {
     "major": None,
     "type": None,
     "student_history": [],
-    "remaining_required_courses": []
+    "remaining_required_courses": [],
+    "remaining_upper_div_courses": [],
+    "student_id": None
+}
+
+student_preferences = {
+    "preferredTimeOfDay": "any",
+    "workloadPreference": "balanced",
+    "interestAreas": [],
+    "preferredDays": [],
+    "preferredUnitsPerQuarter": 15,
+    "preferGaps": False,
+    "preferConsecutiveClasses": False
 }
 
 def is_schedule_request(message):
@@ -557,7 +595,9 @@ def is_schedule_request(message):
         "what should my schedule be", "recommend a schedule",
         "help me plan", "organize my classes", "build me a schedule",
         "create a schedule", "balance my schedule", "optimal schedule",
-        "best schedule", "good schedule", "manageable schedule"
+        "best schedule", "good schedule", "manageable schedule",
+        "change my schedule", "update my schedule", "modify my schedule",
+        "adjust my schedule", "new schedule"
     ]
     
     message_lower = message.lower()
@@ -600,6 +640,7 @@ def extract_schedule_preferences(message):
     except Exception as e:
         print(f"Error parsing schedule preferences JSON: {e}")
         return {}
+
 def extract_and_store_preferences(message):
     """Extract and store student preferences from message."""
     extraction_prompt = f"""
@@ -637,7 +678,7 @@ def extract_and_store_preferences(message):
         print(f"Error parsing preferences: {e}")
         return {}
 
-def generate_personalized_schedule(preferences, student_history, required_courses, major):
+def generate_personalized_schedule(preferences, student_history, required_courses, major, student_id=None):
     """Generate a personalized schedule based on student preferences."""
     db = client["course"]
     collection = db['classInfo']
@@ -682,6 +723,8 @@ def generate_personalized_schedule(preferences, student_history, required_course
     
     # Get available courses
     available_courses = list(collection.find(query, {'_id': 0}))
+    
+    # Filter out courses student
     
     # Filter out courses student has already taken
     available_courses = [course for course in available_courses 
